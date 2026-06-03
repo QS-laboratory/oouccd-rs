@@ -1,0 +1,23 @@
+# Rust build artifacts
+target/
+
+# Local DB and config files
+*.db
+config_lih_*.json
+lih_*.db
+configs_lih.sh
+
+# Python caches
+__pycache__/
+*.pyc
+.venv/
+seq-venv/
+
+# Generated infra configs (uploaded separately)
+infra/configs/
+infra/job_deploy_*.json
+
+# Editor and OS files
+.DS_Store
+.idea/
+*.swp

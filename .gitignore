@@ -1,0 +1,7 @@
+infra/configs/*
+*.db
+.env
+target/
+seq-venv/
+summary/
+infra/
