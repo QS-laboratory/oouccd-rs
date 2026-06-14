@@ -3,5 +3,7 @@ infra/configs/*
 .env
 target/
 seq-venv/
-summary/
 infra/
+
+summary/*
+!summary/scripts
