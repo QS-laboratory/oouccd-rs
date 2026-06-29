@@ -7,7 +7,7 @@ edition = "2021"
 aberth = "0.4.1"
 anyhow = "1.0.102"
 argmin = "0.11.0"
-argmin-math = { version = "0.5.1", features = ["vec"] }
+argmin-math = { version = "0.5.1", features = ["vec", "ndarray_latest"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 nalgebra = "0.34.2"
 ndarray = { version = "0.15", features = ["serde"] }

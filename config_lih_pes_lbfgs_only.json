@@ -1,0 +1,31 @@
+{
+  "task_name": "LiH_PES",
+  "chemistry": {
+    "geometry": "Li 0 0 0; H 0 0 {R}",
+    "basis": "sto-3g",
+    "charge": 0,
+    "spin": 0,
+    "freeze_core": 0
+  },
+  "scan_parameters": {
+    "{R}": {
+      "start": 1.0,
+      "end": 3.6,
+      "steps": 14
+    }
+  },
+  "methods": [
+    {
+      "label": "OO(lbfgs)-UCCD(seq)",
+      "max_macro_iterations": 50,
+      "energy_tolerance": 1e-8,
+      "ucc_optimizer": {
+        "ansatz_config": { "type": "UCCD" },
+        "solver_config": { "type": "sequential" }
+      },
+      "orbital_optimizer": {
+        "solver_config": { "type": "lbfgs", "max_iter": 200 }
+      }
+    }
+  ]
+}

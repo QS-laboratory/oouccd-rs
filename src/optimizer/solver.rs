@@ -1,13 +1,19 @@
-use crate::chemistry::engine::ClassicalEngine;
 use crate::checkpoint::manager::Logger;
+use crate::chemistry::engine::ClassicalEngine;
 use crate::chemistry::molecular_context::MolecularContext;
-use crate::config::{AnsatzConfig, MethodConfig, OrbitalOptimizerConfig, SolverConfig, UccOptimizerConfig};
-use crate::optimizer::lbfgs::{run_lbfgs, GradientType};
+use crate::config::{
+    AnsatzConfig, MethodConfig, OrbitalOptimizerConfig, SolverConfig, UccOptimizerConfig,
+};
+use crate::optimizer::lbfgs::finite_diff_gradient;
 use crate::optimizer::trigonometric::minimize_trigonometric_func;
 use crate::quantum::engine::QuantumEngine;
 use crate::quantum::unitary_coupled_cluster_gates::Excitation;
 use ndarray::Array1;
 use std::f64::consts::PI;
+
+use argmin::core::{CostFunction, Error, Executor, Gradient, State};
+use argmin::solver::linesearch::MoreThuenteLineSearch;
+use argmin::solver::quasinewton::LBFGS;
 
 pub struct Optimizer {
     pub classical_engine: ClassicalEngine,
@@ -40,7 +46,10 @@ impl Optimizer {
         let n_oo = oo_params_pairs.len();
 
         let ucc_opt = build_ucc_optimizer(&method.ucc_optimizer);
-        let orb_opt = method.orbital_optimizer.as_ref().map(|cfg| build_orbital_optimizer(cfg));
+        let orb_opt = method
+            .orbital_optimizer
+            .as_ref()
+            .map(|cfg| build_orbital_optimizer(cfg));
 
         Self {
             classical_engine,
@@ -60,22 +69,30 @@ impl Optimizer {
         let ucc_names = (0..self.vqe_params.len())
             .map(|i| format!("theta_{}", i))
             .collect();
-        let oo_names = self.oo_params_pairs
+        let oo_names = self
+            .oo_params_pairs
             .iter()
             .map(|(i, k)| format!("kappa_{}_{}", i, k))
             .collect();
         logger.register_parameters(ucc_names, oo_names);
 
-        let (rdm1, rdm2) = self.quantum_engine.get_rdm(self.vqe_params.as_slice().unwrap());
+        let (rdm1, rdm2) = self
+            .quantum_engine
+            .get_rdm(self.vqe_params.as_slice().unwrap());
         let mut prev_energy = self.classical_engine.evaluate_energy(&rdm1, &rdm2);
 
         for sweep in 1..=self.max_macro_iterations {
             let t_sweep = std::time::Instant::now();
             // --- Orbital Optimization ---
             if let Some(oo) = &self.orb_opt {
-                eprintln!("[solver] sweep={sweep}/{} | OO start", self.max_macro_iterations);
+                eprintln!(
+                    "[solver] sweep={sweep}/{} | OO start",
+                    self.max_macro_iterations
+                );
                 let t_oo = std::time::Instant::now();
-                let (rdm1, rdm2) = self.quantum_engine.get_rdm(self.vqe_params.as_slice().unwrap());
+                let (rdm1, rdm2) = self
+                    .quantum_engine
+                    .get_rdm(self.vqe_params.as_slice().unwrap());
                 let pairs = &self.oo_params_pairs;
                 let engine = &self.classical_engine;
 
@@ -92,11 +109,18 @@ impl Optimizer {
                 }
                 // Reset oo_params to zero (rotation is now baked into h1, h2)
                 self.oo_params.fill(0.0);
-                eprintln!("[solver] sweep={sweep}/{} | OO done ({:.1}s)", self.max_macro_iterations, t_oo.elapsed().as_secs_f64());
+                eprintln!(
+                    "[solver] sweep={sweep}/{} | OO done ({:.1}s)",
+                    self.max_macro_iterations,
+                    t_oo.elapsed().as_secs_f64()
+                );
             }
 
             // --- UCC Optimization ---
-            eprintln!("[solver] sweep={sweep}/{} | UCC start", self.max_macro_iterations);
+            eprintln!(
+                "[solver] sweep={sweep}/{} | UCC start",
+                self.max_macro_iterations
+            );
             let t_ucc = std::time::Instant::now();
             let quantum = &self.quantum_engine;
             let classical = &self.classical_engine;
@@ -105,9 +129,15 @@ impl Optimizer {
                 classical.evaluate_energy(&g1, &g2)
             };
             self.ucc_opt.optimize(&mut self.vqe_params, &mut eval_vqe);
-            eprintln!("[solver] sweep={sweep}/{} | UCC done ({:.1}s)", self.max_macro_iterations, t_ucc.elapsed().as_secs_f64());
+            eprintln!(
+                "[solver] sweep={sweep}/{} | UCC done ({:.1}s)",
+                self.max_macro_iterations,
+                t_ucc.elapsed().as_secs_f64()
+            );
 
-            let (rdm1, rdm2) = self.quantum_engine.get_rdm(self.vqe_params.as_slice().unwrap());
+            let (rdm1, rdm2) = self
+                .quantum_engine
+                .get_rdm(self.vqe_params.as_slice().unwrap());
             let e = self.classical_engine.evaluate_energy(&rdm1, &rdm2);
             let delta = (prev_energy - e).abs();
             let converged = delta < self.energy_tolerance;
@@ -123,11 +153,17 @@ impl Optimizer {
             prev_energy = e;
         }
 
-        let (rdm1, rdm2) = self.quantum_engine.get_rdm(self.vqe_params.as_slice().unwrap());
+        let (rdm1, rdm2) = self
+            .quantum_engine
+            .get_rdm(self.vqe_params.as_slice().unwrap());
         let final_e = self.classical_engine.evaluate_energy(&rdm1, &rdm2);
         logger.save_iteration(
-            self.max_macro_iterations, 0, final_e, false,
-            &self.vqe_params, true,
+            self.max_macro_iterations,
+            0,
+            final_e,
+            false,
+            &self.vqe_params,
+            true,
         );
 
         Ok(())
@@ -182,12 +218,22 @@ struct LbfgsUccOptimizer {
 }
 impl UccOptimizer for LbfgsUccOptimizer {
     fn optimize(&self, theta: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
-        let (x_opt, e_opt) = run_lbfgs(
-            theta.to_vec(),
-            self.max_iter,
-            objective,
-            GradientType::FiniteDiff(1e-4),
-        );
+        let problem = ArgminProblem::new(objective, 1e-4);
+        let init_param = theta.to_vec();
+
+        let linesearch = MoreThuenteLineSearch::new().with_c(1e-4, 0.9).unwrap();
+        let solver = LBFGS::new(linesearch, 10)
+            .with_tolerance_grad(1e-6)
+            .unwrap();
+
+        let res = Executor::new(problem, solver)
+            .configure(|state| state.param(init_param).max_iters(self.max_iter as u64))
+            .run()
+            .unwrap();
+
+        let x_opt = res.state().get_best_param().unwrap().clone();
+        let e_opt = res.state().get_best_cost();
+
         *theta = Array1::from_vec(x_opt);
         e_opt
     }
@@ -198,12 +244,22 @@ struct LbfgsOrbitalOptimizer {
 }
 impl OrbitalOptimizer for LbfgsOrbitalOptimizer {
     fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
-        let (x_opt, e_opt) = run_lbfgs(
-            kappa.to_vec(),
-            self.max_iter,
-            objective,
-            GradientType::FiniteDiff(1e-5),
-        );
+        let problem = ArgminProblem::new(objective, 1e-5);
+        let init_param = kappa.to_vec();
+
+        let linesearch = MoreThuenteLineSearch::new().with_c(1e-4, 0.9).unwrap();
+        let solver = LBFGS::new(linesearch, 10)
+            .with_tolerance_grad(1e-6)
+            .unwrap();
+
+        let res = Executor::new(problem, solver)
+            .configure(|state| state.param(init_param).max_iters(self.max_iter as u64))
+            .run()
+            .unwrap();
+
+        let x_opt = res.state().get_best_param().unwrap().clone();
+        let e_opt = res.state().get_best_cost();
+
         *kappa = Array1::from_vec(x_opt);
         e_opt
     }
@@ -233,3 +289,42 @@ impl OrbitalOptimizer for SequentialOrbitalOptimizer {
     }
 }
 
+// Wrapper struct to make FnMut closures work with argmin's CostFunction and Gradient traits
+use std::cell::RefCell;
+
+struct ArgminProblem<'a> {
+    objective: RefCell<&'a mut dyn FnMut(&[f64]) -> f64>,
+    finite_diff_eps: f64,
+}
+
+impl<'a> ArgminProblem<'a> {
+    fn new(objective: &'a mut dyn FnMut(&[f64]) -> f64, finite_diff_eps: f64) -> Self {
+        Self {
+            objective: RefCell::new(objective),
+            finite_diff_eps,
+        }
+    }
+}
+
+impl<'a> CostFunction for ArgminProblem<'a> {
+    type Param = Vec<f64>;
+    type Output = f64;
+
+    fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
+        Ok((self.objective.borrow_mut())(param))
+    }
+}
+
+impl<'a> Gradient for ArgminProblem<'a> {
+    type Param = Vec<f64>;
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Error> {
+        let grad = finite_diff_gradient(
+            param,
+            &mut *self.objective.borrow_mut(),
+            self.finite_diff_eps,
+        );
+        Ok(grad)
+    }
+}
