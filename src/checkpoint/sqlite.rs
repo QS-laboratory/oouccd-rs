@@ -206,6 +206,7 @@ mod tests {
                 ansatz_config: crate::config::AnsatzConfig::Uccd,
             },
             orbital_optimizer: None,
+            rdm_evaluation: crate::config::RdmEvaluationConfig::default(),
         };
 
         let task_config = TaskConfig {

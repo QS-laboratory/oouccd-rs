@@ -31,7 +31,12 @@ pub struct Optimizer {
 impl Optimizer {
     pub fn build(ctx: &MolecularContext, method: &MethodConfig) -> Self {
         let is_singles = method.ucc_optimizer.ansatz_config == AnsatzConfig::Uccsd;
-        let quantum_engine = QuantumEngine::new(ctx.n_orb, ctx.n_elec, is_singles);
+        let quantum_engine = QuantumEngine::new(
+            ctx.n_orb,
+            ctx.n_elec,
+            is_singles,
+            method.rdm_evaluation.clone(),
+        );
         let classical_engine = ClassicalEngine::from_context(ctx);
 
         let n_occ = ctx.n_elec / 2;
