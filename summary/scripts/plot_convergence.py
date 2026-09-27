@@ -15,45 +15,59 @@ from matplotlib.ticker import MaxNLocator
 from pyscf import gto, scf, fci as pyscf_fci
 
 # ── Style ───────────────────────────────────────────────────────────────────
-plt.rcParams.update({
-    "font.family":         "DejaVu Sans",
-    "font.size":           11,
-    "axes.linewidth":      1.0,
-    "axes.labelsize":      12,
-    "axes.titlesize":      12,
-    "legend.fontsize":     10,
-    "legend.framealpha":   0.9,
-    "xtick.direction":     "in",
-    "ytick.direction":     "in",
-    "axes.grid":           True,
-    "grid.linestyle":      "--",
-    "grid.alpha":          0.5,
-    "grid.color":          "#aaaaaa",
-    "figure.dpi":          150,
-})
+plt.rcParams.update(
+    {
+        "font.family": "DejaVu Sans",
+        "font.size": 11,
+        "axes.linewidth": 1.0,
+        "axes.labelsize": 12,
+        "axes.titlesize": 12,
+        "legend.fontsize": 10,
+        "legend.framealpha": 0.9,
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "axes.grid": True,
+        "grid.linestyle": "--",
+        "grid.alpha": 0.5,
+        "grid.color": "#aaaaaa",
+        "figure.dpi": 150,
+    }
+)
 
 METHOD_ORDER = [
     "OO(seq)-UCCD(seq)",
     "OO(lbfgs)-UCCD(seq)",
-    "UCCD(seq)",
-    "UCCSD(seq)",
+    # "UCCD(seq)",
+    # "UCCSD(seq)",
 ]
 
 PLOTSTYLES = {
-    "OO(seq)-UCCD(seq)":     dict(linestyle="solid", marker="^", markersize=8, color="#2ca02c"),
-    "OO(lbfgs)-UCCD(seq)":   dict(linestyle="solid", marker="v", markersize=8, color="#e377c2"),
-    "UCCD(seq)":            dict(linestyle="dashed", marker="o", markersize=4, color="#1f77b4"),
-    "UCCSD(seq)":            dict(linestyle="dashed", marker="o", markersize=4, color="#ff7f0e"),
+    "OO(seq)-UCCD(seq)": dict(
+        linestyle="solid", marker="^", markersize=8, color="#2ca02c"
+    ),
+    "OO(lbfgs)-UCCD(seq)": dict(
+        linestyle="dashed", marker="v", markersize=8, color="#e377c2"
+    ),
+    "UCCD(seq)": dict(linestyle="dashed", marker="o", markersize=4, color="#1f77b4"),
+    "UCCSD(seq)": dict(linestyle="dashed", marker="o", markersize=4, color="#ff7f0e"),
 }
 
 # ── Parse arguments ─────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="LiH Convergence Plotter")
-parser.add_argument("--results-dir", type=str,
-                    default=os.path.join(os.path.dirname(__file__), "..", "results", "lih_pes"),
-                    help="Directory containing task_*.db files")
-parser.add_argument("--out-dir", type=str,
-                    default=os.path.join(os.path.dirname(__file__), "..", "images", "convergence_plots"),
-                    help="Directory to save the convergence PNGs")
+parser.add_argument(
+    "--results-dir",
+    type=str,
+    default=os.path.join(os.path.dirname(__file__), "..", "results", "lih_pes"),
+    help="Directory containing task_*.db files",
+)
+parser.add_argument(
+    "--out-dir",
+    type=str,
+    default=os.path.join(
+        os.path.dirname(__file__), "..", "images", "convergence_plots"
+    ),
+    help="Directory to save the convergence PNGs",
+)
 args = parser.parse_args()
 
 os.makedirs(args.out_dir, exist_ok=True)
@@ -66,27 +80,30 @@ for db_path in db_files:
     try:
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
-        
+
         runs = cur.execute("SELECT id, conditions_json FROM runs").fetchall()
         for run_id, cond_json in runs:
             cond = json.loads(cond_json)
             method = cond.get("method", "unknown")
             geom = cond.get("geometry", "")
-            
+
             m = re.search(r"H\s+0\s+0\s+([\d.]+)", geom)
             if not m:
                 continue
-                
+
             R_val = float(m.group(1))
             R_key = round(R_val, 5)
-            
-            iters = cur.execute("SELECT macro_idx, energy FROM macro_iterations WHERE run_id = ? ORDER BY macro_idx", (run_id,)).fetchall()
-            
+
+            iters = cur.execute(
+                "SELECT macro_idx, energy FROM macro_iterations WHERE run_id = ? ORDER BY macro_idx",
+                (run_id,),
+            ).fetchall()
+
             if iters:
                 if R_key not in data:
                     data[R_key] = {}
                 data[R_key][method] = [e for idx, e in iters]
-                
+
         conn.close()
     except Exception as e:
         print(f"[warn] {db_path}: {e}")
@@ -108,10 +125,10 @@ for R_key in sorted(data.keys()):
     mf.kernel()
     hf_energies[R_key] = mf.e_tot
 
-    norb  = mf.mo_coeff.shape[1]
+    norb = mf.mo_coeff.shape[1]
     nelec = mol.nelectron
-    h1    = mf.mo_coeff.T @ mf.get_hcore() @ mf.mo_coeff
-    eri   = mol.ao2mo(mf.mo_coeff, compact=False).reshape(norb, norb, norb, norb)
+    h1 = mf.mo_coeff.T @ mf.get_hcore() @ mf.mo_coeff
+    eri = mol.ao2mo(mf.mo_coeff, compact=False).reshape(norb, norb, norb, norb)
 
     cisolver = pyscf_fci.direct_spin0.FCI()
     cisolver.max_cycle = 200
@@ -125,18 +142,18 @@ for R_key in sorted(data.keys()):
     fig1, ax1 = plt.subplots(figsize=(6, 4))
     # Figure 2: Delta E
     fig2, ax2 = plt.subplots(figsize=(6, 4))
-    
+
     e_fci = fci_energies[R_key]
     e_hf = hf_energies[R_key]
-    
+
     for method in METHOD_ORDER:
         if method in data[R_key]:
             raw_energies = data[R_key][method]
-            
+
             # Start with HF at iteration 0
             iters_to_plot = [0]
             diffs_to_plot = [e_hf - e_fci]
-            
+
             for it, e in enumerate(raw_energies, start=1):
                 delta = e - e_fci
                 if delta > 0:
@@ -144,10 +161,11 @@ for R_key in sorted(data.keys()):
                     diffs_to_plot.append(delta)
                 else:
                     raise Exception("Energy is below FCI.")
-            
+
             if diffs_to_plot:
                 ax1.plot(
-                    iters_to_plot, diffs_to_plot,
+                    iters_to_plot,
+                    diffs_to_plot,
                     label=method,
                     **PLOTSTYLES[method],
                 )
@@ -157,15 +175,16 @@ for R_key in sorted(data.keys()):
             delta_e_y = []
             for i in range(1, len(raw_energies)):
                 e_curr = raw_energies[i]
-                e_prev = raw_energies[i-1]
+                e_prev = raw_energies[i - 1]
                 delta_e = abs(e_prev - e_curr)
                 if delta_e > 0:
-                    delta_e_x.append(i + 1) # 1-indexed macro_idx
+                    delta_e_x.append(i + 1)  # 1-indexed macro_idx
                     delta_e_y.append(delta_e)
-            
+
             if delta_e_x:
                 ax2.plot(
-                    delta_e_x, delta_e_y,
+                    delta_e_x,
+                    delta_e_y,
                     label=method,
                     **PLOTSTYLES[method],
                 )
@@ -179,14 +198,14 @@ for R_key in sorted(data.keys()):
     ax2.set_yscale("log")
     ax2.set_xlabel("Iteration")
     ax2.set_ylabel(r"$\Delta E$ (Ha)")
-    ax2.axhline(1e-8, color='red', linestyle=':', label='Threshold (1e-8)')
+    ax2.axhline(1e-8, color="red", linestyle=":", label="Threshold (1e-8)")
     ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax2.legend(loc="upper right")
-    
+
     # Format R=1.0 -> R010
     R_num = int(round(R_key * 10))
     R_str = f"R{R_num:03d}"
-    
+
     out_path1 = os.path.join(args.out_dir, f"lih_{R_str}_convergence.png")
     fig1.savefig(out_path1, bbox_inches="tight", dpi=150)
     plt.close(fig1)

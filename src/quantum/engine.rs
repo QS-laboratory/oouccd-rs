@@ -1,6 +1,6 @@
 use crate::chemistry::rdm::{compute_1rdm_spatial, compute_2rdm_spatial};
 use crate::config::RdmEvaluationConfig;
-use crate::quantum::rdm_measurement::measure_spatial_rdms;
+use crate::quantum::rdm_measurement::RdmMeasurementPlan;
 use crate::quantum::unitary_coupled_cluster_gates::{build_ucc_ansatz, Excitation};
 use ndarray::{Array2, Array4};
 use num_complex::Complex64;
@@ -18,6 +18,7 @@ pub struct QuantumEngine {
     pub n_params: usize,
     pub excitations: Vec<Excitation>,
     rdm_evaluation: RdmEvaluationConfig,
+    rdm_measurement_plan: Option<RdmMeasurementPlan>,
     evaluation_count: AtomicU64,
 }
 
@@ -32,6 +33,10 @@ impl QuantumEngine {
         let (ansatz_circuit, excitations, n_params) =
             build_ucc_ansatz(n_elec, n_orb, false, false, include_singles);
         let backend = Backend::new(n_qubits, None);
+        let rdm_measurement_plan = match rdm_evaluation {
+            RdmEvaluationConfig::Statevector {} => None,
+            RdmEvaluationConfig::FiniteShot { .. } => Some(RdmMeasurementPlan::new(n_orb)),
+        };
 
         Self {
             ansatz_circuit,
@@ -40,6 +45,7 @@ impl QuantumEngine {
             n_params,
             excitations,
             rdm_evaluation,
+            rdm_measurement_plan,
             evaluation_count: AtomicU64::new(0),
         }
     }
@@ -57,7 +63,10 @@ impl QuantumEngine {
                 let evaluation = self.evaluation_count.fetch_add(1, Ordering::Relaxed);
                 let base_seed = seed.unwrap_or_else(rand::random);
                 let measurement_seed = base_seed.wrapping_add(evaluation);
-                measure_spatial_rdms(&state_vector, n_spatial, shots, measurement_seed)
+                self.rdm_measurement_plan
+                    .as_ref()
+                    .expect("finite-shot mode requires an RDM measurement plan")
+                    .measure(&state_vector, shots, measurement_seed)
             }
         }
     }
