@@ -3,6 +3,8 @@ infra/configs/*
 .env
 target/
 seq-venv/
+.paper-env/
+local_runs/
 infra/
 
 summary/*

@@ -1,5 +1,10 @@
 # Reproducing the paper results
 
+For the argo Slurm environment and the fresh-checkout limitations discovered on
+October 19, 2026, see section 8. The absolute macOS paths below describe the
+earlier archive inspection; those ignored inputs and databases are not present
+in a fresh clone.
+
 ## Scope and verification status
 
 This guide covers the LiH potential-energy curve and the convergence comparison
@@ -353,3 +358,194 @@ sh "$ROOT/docs/build.sh" main_rev3
 
 This requires TeX Live, `latexmk`, and the manuscript's packages, and writes
 build products below the repository's ignored documentation build directory.
+
+## 8. Running on argo with Slurm
+
+### Availability and missing historical artifacts
+
+The October 19, 2026 inspection found a login host `argo00` and Slurm CPU
+nodes `argo01` and `argo02`. The default partition is `defq`; each compute node
+advertises 144 CPUs and 2,310,000 MB of schedulable memory. CPU jobs suffice
+for the supplied state-vector backend. Resource availability varies with the
+other jobs; capacity alone does not establish numerical reproducibility.
+
+This checkout (`6cd1b8b` before the argo additions) has neither `infra/` nor
+`summary/results/lih_pes/`: both are ignored by Git. Therefore sections 4--6
+cannot be executed literally on a fresh clone. The original template and
+archived iteration histories must be recovered for a full historical comparison.
+The user identified the bucket `gs://example-results-bucket`; no object prefix has
+yet been established. Anonymous object listing returned HTTP 401, and no
+`gcloud` executable or user GCP credential configuration was found on argo.
+
+`scripts/prepare_paper_slurm.py` reconstructs all 56 inputs using the tracked
+L-BFGS-only master, the settings documented above, and the current config schema.
+These are explicitly reconstructed inputs, not recovered historical JSONs.
+The four-method numbering is the same as in section 5: 003, 017, 031, and 045
+are the four methods at 1.60 Å. Every task uses the 100-iteration cap from the
+manuscript, including the slowly converging stretched-bond UCCSD points.
+
+### Dedicated environment and build
+
+The dedicated environment is under `.paper-env/`; it does not modify the
+shared `/opt/venvs/py312` environment or shell startup files. The inspected shared
+environment has different package versions and should not be substituted
+silently. The argo environment uses Python 3.12.3, Rust 1.99.1, and the pinned
+requirements plus Matplotlib 3.9.4. `pip check` passed.
+
+For a new installation from the repository root (skip installation steps when
+the environment already exists):
+
+```bash
+export ROOT="$(git rev-parse --show-toplevel)"
+mkdir -p "$ROOT/.paper-env"
+python3 -m venv "$ROOT/.paper-env/venv"
+"$ROOT/.paper-env/venv/bin/python" -m pip install \
+  -r "$ROOT/requirements.txt" 'matplotlib==3.9.4'
+export CARGO_HOME="$ROOT/.paper-env/cargo"
+export RUSTUP_HOME="$ROOT/.paper-env/rustup"
+curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+  -o "$ROOT/.paper-env/rustup-init.sh"
+sh "$ROOT/.paper-env/rustup-init.sh" -y --no-modify-path \
+  --profile minimal --default-toolchain 1.99.1
+sbatch scripts/build_paper.sbatch
+```
+
+Build on a compute node, then wait for successful completion before preparing
+tasks. `scripts/build_paper.sbatch` requests four CPUs, 8 GB, and 30 minutes,
+sets the exact PyO3 interpreter, and runs `cargo build --release --locked`.
+An actual first build failed because argo01 has the Python runtime library
+`libpython3.12.so.1.0` but lacks the development linker name `libpython3.12.so`.
+The supplied build script creates that name as a symlink in `.paper-env/lib`
+and sets `LIBRARY_PATH` for linking. The following build succeeded; no system
+package installation or numerical-code change was needed. Runtime linking uses
+the system's existing `libpython3.12.so.1.0`.
+
+### Prepare, submit, and validate
+
+Preparation creates a new workspace and **does not submit jobs**:
+
+```bash
+python3 scripts/prepare_paper_slurm.py local_runs/paper-smoke-NEW --scope smoke
+sbatch --test-only local_runs/paper-smoke-NEW/run.sbatch
+job_id="$(sbatch --parsable local_runs/paper-smoke-NEW/run.sbatch)"
+sbatch --dependency="afterok:$job_id" --kill-on-invalid-dep=yes \
+  local_runs/paper-smoke-NEW/analyze.sbatch
+squeue -u "$USER"
+```
+
+The smoke array contains four complete 1.60 Å calculations. To prepare the full
+scan, choose a new workspace and use `--scope full`. Submission is the same;
+the full scan has 56 array elements. Defaults are one CPU, 4 GB, and two hours
+per element, with at most four elements running simultaneously. Set `--cpus`
+and `--concurrency` during preparation to change these independently; for
+example, `--cpus 1 --concurrency 16` reserves at most 16 CPUs for the array.
+The one-CPU default follows the argo scaling benchmark below. Use measured
+timings before selecting production limits for 100-iteration points.
+The code parallelizes RDM evaluation with
+Rayon; `RAYON_NUM_THREADS` follows the allocation and BLAS/OpenMP threads are
+set to one to avoid nested thread oversubscription. No MPI ranks or GPUs are
+required.
+
+Each workspace contains 56 task JSONs, a private binary copy and its SHA-256,
+the source commit archive and tracked diff, Python package versions, plotting
+and validation script snapshots, separate databases, and Slurm logs. Preserve
+the dedicated Python environment while jobs are pending/running; it is recorded
+but is not copied into each workspace. A task lock and existing-file check
+prevent accidental DB reuse. A failed run must be retried in a new workspace.
+
+The dependent analysis job checks all selected databases, their completion,
+history indices, final energies and convergence flags, and the stopping rule.
+Duplicate final rows at the iteration cap are collapsed. The four 1.60 Å
+checkpoints are compared with a numerical tolerance of `1e-8` Ha; reference
+iteration counts are reported separately. This comparison tolerance is distinct
+from both the optimizer stopping rule and the FCI error. The job writes
+`validation.json` and regenerates convergence plots with freshly computed FCI
+references. It uses the new `--include-fixed-orbitals --pdf` options to produce
+all four manuscript curves in both PNG and PDF. Without these options the
+convergence script retains its previous two-OO-method, PNG-only behavior.
+Full-scan analysis also generates the PES PNG. This establishes a new PDF
+export procedure; it does not recover the historical PDF export commands.
+
+Validation can also be rerun without submitting another chemistry calculation:
+
+```bash
+python3 scripts/check_paper_slurm.py local_runs/paper-smoke-NEW
+sacct -j "$job_id" --format=JobID,State,Elapsed,AllocCPUS,MaxRSS,ExitCode
+```
+
+Passing the smoke check establishes reproducibility of the documented numerical
+checkpoints on the tested node. Establishing the entire paper's PES and
+iteration-history agreement still requires the full scan and the GCS archives.
+
+### Actual argo smoke result, October 19, 2026
+
+Array job `10610` ran all four 1.60 Å methods on argo01 with four CPUs each;
+analysis job `10617` passed every database/checkpoint check and generated the
+four-curve convergence PNG/PDF. All four iteration counts matched section 6.
+
+| Method | Absolute difference from section 6 (Ha) | Iterations | Slurm elapsed |
+| --- | --- | --- | --- |
+| UCCD(seq) | 4.1e-14 | 4 | 2 min 32 s |
+| UCCSD(seq) | 1.3e-14 | 7 | 5 min 22 s |
+| OO(seq)-UCCD(seq) | 1.1e-13 | 7 | 4 min 17 s |
+| OO(lbfgs)-UCCD(seq) | 1.1e-13 | 7 | 4 min 17 s |
+
+The workspace is `local_runs/argo-smoke-20261019/`; retain `validation.json`,
+`slurm-accounting.txt`, the configs, databases, provenance, and figures. Sampled
+step MaxRSS values were approximately 92--95 MiB. A separate argo02 preflight
+verified Python/package imports, binary startup, and runtime library resolution;
+the chemistry calculations above were performed on argo01.
+
+All 56 inputs have also been prepared in
+`local_runs/argo-full-prepared-20261019/`, but **the full scan has not been
+submitted**. Following the benchmark and the user's choice, this prepared array
+uses one CPU per task and at most 16 simultaneous tasks (16 CPUs and 64 GB
+reserved in total), with a two-hour limit per task. The directory includes
+`preflight.json`, and `sbatch --test-only` passed with the final one-CPU script.
+Fresh calculations do not need GCP authentication; archive retrieval and
+historical comparison remain separate work.
+
+### Comparing one and four CPUs
+
+```bash
+sbatch --nodelist=argo01 scripts/benchmark_paper_cpus.sbatch \
+  "$PWD/local_runs/argo-smoke-20261019"
+```
+
+This uses one four-CPU allocation and runs all trials sequentially on that node.
+Each Slurm step binds exactly one or four CPUs, with the matching Rayon thread
+count. BLAS/OpenMP remain at one thread. Both UCCD and UCCSD perform exactly
+one complete first macro-iteration from zero amplitudes at 1.60 Å. The order
+for each method is 1, 4, 4, 1 CPUs, yielding two trials per CPU count with fresh
+processes/databases. The one-iteration cap is intentional benchmark work and
+must not be mistaken for a converged paper calculation.
+
+The unique `local_runs/paper-cpu-bench-JOB_ID.XXXXXX/` workspace contains CPU
+affinities, package versions, inputs, databases, individual wall/CPU/RSS timings,
+and `benchmark.json`. The report checks that changing CPU count changes the
+energy by less than `1e-12` Ha. It reports median wall time, speedup, parallel
+efficiency (speedup/4), and the CPU reservation cost ratio (4/speedup). This last
+ratio estimates separate one-CPU versus four-CPU production jobs; the benchmark
+itself holds its four-CPU allocation throughout for a controlled comparison.
+
+Job `10619` completed the benchmark on argo01. Results (medians of two trials
+per setting, including Python initialization, integral generation, and DB output):
+
+| Method | 1 CPU (s) | 4 CPUs (s) | Speedup | Reserved CPU-time ratio, 4/1 |
+| --- | --- | --- | --- | --- |
+| UCCD(seq) | 40.40 | 37.66 | 1.073 | 3.73 |
+| UCCSD(seq) | 50.20 | 47.73 | 1.052 | 3.80 |
+
+The trial energies were identical across CPU counts for each method. The raw
+report is `local_runs/paper-cpu-bench-10619.JhqKdk/benchmark.json`. The limited
+speedup is consistent with the code structure: RDM elements use Rayon, while
+the default QuEST CPU build does not enable OpenMP and the amplitude updates
+are sequential. Measured user+system CPU time divided by wall time was about
+1.3 for the four-CPU trials, so most of the four-CPU reservation was unused.
+This is not a function-level profile or a scaling result for larger molecules.
+
+For this 12-qubit LiH workload, use one CPU per production task. With a fixed
+16-CPU budget, 16 independent one-CPU tasks use the resources more efficiently
+than four four-CPU tasks. Batch completion time also depends on the iteration
+counts, queueing, and the longest task; it has not yet been measured for the
+full scan.

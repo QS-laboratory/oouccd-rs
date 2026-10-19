@@ -68,7 +68,16 @@ parser.add_argument(
     ),
     help="Directory to save the convergence PNGs",
 )
+parser.add_argument(
+    "--include-fixed-orbitals", action="store_true",
+    help="Also plot UCCD and UCCSD, as in the manuscript figure",
+)
+parser.add_argument(
+    "--pdf", action="store_true", help="Save PDF copies in addition to PNGs",
+)
 args = parser.parse_args()
+if args.include_fixed_orbitals:
+    METHOD_ORDER.extend(["UCCD(seq)", "UCCSD(seq)"])
 
 os.makedirs(args.out_dir, exist_ok=True)
 db_files = sorted(glob.glob(os.path.join(args.results_dir, "task_*.db")))
@@ -208,10 +217,14 @@ for R_key in sorted(data.keys()):
 
     out_path1 = os.path.join(args.out_dir, f"lih_{R_str}_convergence.png")
     fig1.savefig(out_path1, bbox_inches="tight", dpi=150)
+    if args.pdf:
+        fig1.savefig(os.path.splitext(out_path1)[0] + ".pdf", bbox_inches="tight")
     plt.close(fig1)
     print(f"Saved: {os.path.abspath(out_path1)}")
 
     out_path2 = os.path.join(args.out_dir, f"lih_{R_str}_delta.png")
     fig2.savefig(out_path2, bbox_inches="tight", dpi=150)
+    if args.pdf:
+        fig2.savefig(os.path.splitext(out_path2)[0] + ".pdf", bbox_inches="tight")
     plt.close(fig2)
     print(f"Saved: {os.path.abspath(out_path2)}")
