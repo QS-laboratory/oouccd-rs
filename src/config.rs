@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -14,14 +14,14 @@ pub struct ChemistryConfig {
     pub freeze_core: usize,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SolverConfig {
     Sequential {},
     Lbfgs { max_iter: usize },
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum AnsatzConfig {
     #[serde(rename = "UCCD")]
@@ -30,12 +30,67 @@ pub enum AnsatzConfig {
     Uccsd,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct OrbitalOptimizerConfig {
-    pub solver_config: SolverConfig,
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
+pub struct NewtonOptions {
+    pub stabilized: bool,
+    pub hessian_floor: f64,
+    pub max_step_norm: f64,
+    pub gradient_tolerance: f64,
+    pub max_backtracks: usize,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+impl Default for NewtonOptions {
+    fn default() -> Self {
+        Self {
+            stabilized: true,
+            hessian_floor: 1e-4,
+            max_step_norm: 0.2,
+            gradient_tolerance: 1e-6,
+            max_backtracks: 20,
+        }
+    }
+}
+
+impl NewtonOptions {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.gradient_tolerance.is_finite() && self.gradient_tolerance >= 0.0,
+            "Newton gradient_tolerance must be finite and nonnegative"
+        );
+        if self.stabilized {
+            anyhow::ensure!(
+                self.hessian_floor.is_finite() && self.hessian_floor > 0.0,
+                "Newton hessian_floor must be finite and positive"
+            );
+            anyhow::ensure!(
+                self.max_step_norm.is_finite() && self.max_step_norm > 0.0,
+                "Newton max_step_norm must be finite and positive"
+            );
+        }
+        Ok(())
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OrbitalSolverConfig {
+    Sequential {},
+    Lbfgs {
+        max_iter: usize,
+    },
+    NewtonRaphson {
+        #[serde(flatten)]
+        options: NewtonOptions,
+    },
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct OrbitalOptimizerConfig {
+    pub solver_config: OrbitalSolverConfig,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct UccOptimizerConfig {
     pub solver_config: SolverConfig,
     pub ansatz_config: AnsatzConfig,
@@ -108,7 +163,95 @@ impl TaskConfig {
                 }),
             },
         );
+        conditions.insert(
+            "ucc_optimizer".to_string(),
+            serde_json::json!(self.method.ucc_optimizer),
+        );
+        conditions.insert(
+            "orbital_optimizer".to_string(),
+            serde_json::json!(self.method.orbital_optimizer),
+        );
+        conditions.insert(
+            "max_macro_iterations".to_string(),
+            serde_json::json!(self.method.max_macro_iterations.unwrap_or(50)),
+        );
+        conditions.insert(
+            "energy_tolerance".to_string(),
+            serde_json::json!(self.method.energy_tolerance.unwrap_or(1e-6)),
+        );
 
         conditions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn orbital_solver_json_is_compatible_and_newton_defaults_are_recorded() {
+        for json in [
+            r#"{"type":"sequential"}"#,
+            r#"{"type":"lbfgs","max_iter":50}"#,
+        ] {
+            let parsed: OrbitalSolverConfig = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                serde_json::to_value(parsed).unwrap(),
+                serde_json::from_str::<Value>(json).unwrap()
+            );
+        }
+        let parsed: OrbitalSolverConfig =
+            serde_json::from_str(r#"{"type":"newton_raphson"}"#).unwrap();
+        let OrbitalSolverConfig::NewtonRaphson { options } = &parsed else {
+            panic!("wrong solver")
+        };
+        assert!(options.stabilized);
+        assert_eq!(options.hessian_floor, 1e-4);
+        assert_eq!(options.max_step_norm, 0.2);
+        assert_eq!(options.gradient_tolerance, 1e-6);
+        assert_eq!(options.max_backtracks, 20);
+        assert!(options.validate().is_ok());
+        let serialized = serde_json::to_value(parsed).unwrap();
+        assert_eq!(serialized["stabilized"], true);
+        assert_eq!(serialized["max_backtracks"], 20);
+        assert!(serde_json::from_str::<SolverConfig>(r#"{"type":"newton_raphson"}"#).is_err());
+    }
+
+    #[test]
+    fn run_conditions_distinguish_newton_settings_even_with_identical_labels() {
+        let mut task: TaskConfig = serde_json::from_str(r#"{
+            "task_name":"test", "chemistry":{"geometry":"H 0 0 0; H 0 0 0.735","basis":"sto-3g"},
+            "method":{"label":"same", "ucc_optimizer":{"ansatz_config":{"type":"UCCD"},"solver_config":{"type":"sequential"}},
+            "orbital_optimizer":{"solver_config":{"type":"newton_raphson"}}}
+        }"#).unwrap();
+        let stable = task.generate_conditions();
+        let OrbitalSolverConfig::NewtonRaphson { options } = &mut task
+            .method
+            .orbital_optimizer
+            .as_mut()
+            .unwrap()
+            .solver_config
+        else {
+            unreachable!()
+        };
+        options.stabilized = false;
+        assert_ne!(stable, task.generate_conditions());
+        assert_eq!(
+            stable["orbital_optimizer"]["solver_config"]["hessian_floor"],
+            1e-4
+        );
+    }
+
+    #[test]
+    fn invalid_newton_settings_fail_validation() {
+        let mut options = NewtonOptions::default();
+        options.hessian_floor = 0.0;
+        assert!(options.validate().is_err());
+        options = NewtonOptions::default();
+        options.max_step_norm = f64::NAN;
+        assert!(options.validate().is_err());
+        options = NewtonOptions::default();
+        options.gradient_tolerance = -1.0;
+        assert!(options.validate().is_err());
     }
 }

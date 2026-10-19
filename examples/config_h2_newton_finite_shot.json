@@ -1,0 +1,20 @@
+{
+  "task_name": "H2_Newton_UCCD_FiniteShot_Smoke",
+  "chemistry": {
+    "geometry": "H 0 0 0; H 0 0 0.735",
+    "basis": "sto-3g"
+  },
+  "method": {
+    "label": "OO(newton)-UCCD(seq)-finite-shot",
+    "max_macro_iterations": 3,
+    "energy_tolerance": -1.0,
+    "rdm_evaluation": { "type": "finite_shot", "shots": 1000, "seed": 20261019 },
+    "ucc_optimizer": {
+      "ansatz_config": { "type": "UCCD" },
+      "solver_config": { "type": "sequential" }
+    },
+    "orbital_optimizer": {
+      "solver_config": { "type": "newton_raphson" }
+    }
+  }
+}

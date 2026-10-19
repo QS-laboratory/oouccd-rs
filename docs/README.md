@@ -7,3 +7,5 @@
 - VS Code でこのリポジトリのルートを開くと、`.vscode/settings.json` により LaTeX Workshop での保存時ビルドも `docs/build/<原稿名>/` に出力されます。PDF プレビューもこの出力先を参照します。`docs/` だけをワークスペースとして開く場合は、この設定が適用されないためルートを開き直してください。
 
 ビルドには TeX Live の `latexmk` と、原稿が使用する LaTeX パッケージが必要です。ビルドは `docs/` を作業ディレクトリとして実行するため、原稿中の `figures/...` の参照を変更する必要はありません。
+
+数値計算のPauli RDM共通化、Newton OOの設定・検証方法は [newton_oo.md](newton_oo.md) を参照してください。

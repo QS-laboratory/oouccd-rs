@@ -93,6 +93,19 @@ impl RdmMeasurementPlan {
         }
     }
 
+    /// Exact expectation values using the same observables as finite-shot sampling.
+    pub fn evaluate_exact(&self, state: &[Complex64]) -> (Array2<f64>, Array4<f64>) {
+        self.reconstruct(&self.exact_expectations(state))
+    }
+
+    fn exact_expectations(&self, state: &[Complex64]) -> Vec<f64> {
+        assert_eq!(state.len(), 1usize << (2 * self.n_spatial));
+        self.pauli_words
+            .par_iter()
+            .map(|word| exact_pauli_expectation(state, *word).clamp(-1.0, 1.0))
+            .collect()
+    }
+
     pub fn measure(
         &self,
         state: &[Complex64],
@@ -101,24 +114,22 @@ impl RdmMeasurementPlan {
     ) -> (Array2<f64>, Array4<f64>) {
         assert!(shots > 0, "finite-shot RDM evaluation requires shots > 0");
 
-        let exact_expectations: Vec<f64> = self
-            .pauli_words
-            .par_iter()
-            .map(|word| exact_pauli_expectation(state, *word).clamp(-1.0, 1.0))
-            .collect();
+        let exact_expectations = self.exact_expectations(state);
         let mut rng = StdRng::seed_from_u64(seed);
         let sampled_expectations: Vec<f64> = exact_expectations
             .into_iter()
             .map(|expectation| sample_expectation(expectation, shots, &mut rng))
             .collect();
 
+        self.reconstruct(&sampled_expectations)
+    }
+
+    fn reconstruct(&self, expectations: &[f64]) -> (Array2<f64>, Array4<f64>) {
         let mut gamma1 = Array2::<f64>::zeros((self.n_spatial, self.n_spatial));
         for p in 0..self.n_spatial {
             for q in 0..self.n_spatial {
-                gamma1[[p, q]] = evaluate_plan(
-                    &self.one_body[p * self.n_spatial + q],
-                    &sampled_expectations,
-                );
+                gamma1[[p, q]] =
+                    evaluate_plan(&self.one_body[p * self.n_spatial + q], expectations);
             }
         }
 
@@ -134,8 +145,7 @@ impl RdmMeasurementPlan {
                     for s in 0..self.n_spatial {
                         let index =
                             (((p * self.n_spatial + q) * self.n_spatial + r) * self.n_spatial) + s;
-                        gamma2[[p, q, r, s]] =
-                            evaluate_plan(&self.two_body[index], &sampled_expectations);
+                        gamma2[[p, q, r, s]] = evaluate_plan(&self.two_body[index], expectations);
                     }
                 }
             }
@@ -147,6 +157,14 @@ impl RdmMeasurementPlan {
     #[cfg(test)]
     fn number_pauli_words(&self) -> usize {
         self.pauli_words.len()
+    }
+
+    /// Unique observables that require shots; the identity has no measurement cost.
+    pub fn number_measured_pauli_words(&self) -> usize {
+        self.pauli_words
+            .iter()
+            .filter(|word| word.x_mask | word.y_mask | word.z_mask != 0)
+            .count()
     }
 }
 
@@ -240,6 +258,69 @@ mod tests {
         state[0b1001] = Complex64::new(-0.4, 0.0);
         state[0b1100] = Complex64::new(-0.6244997998398398, 0.0);
         state
+    }
+
+    #[test]
+    fn exact_pauli_rdms_match_direct_rdms_at_h2_and_lih_sizes() {
+        for (n, electrons) in [(2, 2), (6, 4)] {
+            let mut state: Vec<_> = (0usize..1 << (2 * n))
+                .map(|i| {
+                    Complex64::new(
+                        if i.count_ones() == electrons {
+                            ((i + 1) as f64).sin()
+                        } else {
+                            0.0
+                        },
+                        0.0,
+                    )
+                })
+                .collect();
+            let norm = state.iter().map(|v| v.norm_sqr()).sum::<f64>().sqrt();
+            state.iter_mut().for_each(|v| *v /= norm);
+            let plan = RdmMeasurementPlan::new(n);
+            let (one, two) = plan.evaluate_exact(&state);
+            let reference_one = compute_1rdm_spatial(&state, n);
+            let reference_two = compute_2rdm_spatial(&state, n);
+            let error = one
+                .iter()
+                .zip(reference_one.iter())
+                .chain(two.iter().zip(reference_two.iter()))
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0, f64::max);
+            assert!(error < 1e-12, "n={n}: RDM error={error}");
+            if n == 6 {
+                assert_eq!(plan.number_measured_pauli_words(), 2778);
+            }
+        }
+    }
+
+    #[test]
+    fn exact_pauli_rdms_preserve_real_part_convention_for_complex_states() {
+        let mut state = test_state();
+        state[0b0110] *= Complex64::new(0.0, 1.0);
+        let plan = RdmMeasurementPlan::new(2);
+        let (one, two) = plan.evaluate_exact(&state);
+        assert!(one
+            .iter()
+            .zip(compute_1rdm_spatial(&state, 2).iter())
+            .all(|(a, b)| (a - b).abs() < 1e-12));
+        assert!(two
+            .iter()
+            .zip(compute_2rdm_spatial(&state, 2).iter())
+            .all(|(a, b)| (a - b).abs() < 1e-12));
+    }
+
+    #[test]
+    fn identity_and_pauli_eigenstates_have_no_sampling_noise() {
+        let mut rng = StdRng::seed_from_u64(17);
+        assert_eq!(sample_expectation(1.0, 1000, &mut rng), 1.0);
+        assert_eq!(sample_expectation(-1.0, 1000, &mut rng), -1.0);
+        let identity = CompiledPauliWord {
+            x_mask: 0,
+            y_mask: 0,
+            z_mask: 0,
+        };
+        assert_eq!(exact_pauli_expectation(&test_state(), identity), 1.0);
     }
 
     #[test]

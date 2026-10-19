@@ -1,5 +1,5 @@
 use crate::chemistry::molecular_context::MolecularContext;
-use crate::optimizer::utils::{rotate_1body_integrals, rotate_2body_integrals};
+use crate::optimizer::utils::{rotate_1body_integrals, rotate_2body_integrals, rotate_tensor};
 use ndarray::{Array2, Array4};
 
 pub struct ClassicalEngine {
@@ -9,6 +9,17 @@ pub struct ClassicalEngine {
 }
 
 impl ClassicalEngine {
+    pub fn rotated_integrals(&self, rotation: &Array2<f64>) -> (Array2<f64>, Array4<f64>) {
+        (
+            rotate_tensor(&self.h1, rotation),
+            rotate_tensor(&self.h2, rotation),
+        )
+    }
+
+    pub fn apply_orbital_rotation(&mut self, rotation: &Array2<f64>) {
+        (self.h1, self.h2) = self.rotated_integrals(rotation);
+    }
+
     pub fn from_context(ctx: &MolecularContext) -> Self {
         Self {
             h1: ctx.h1.clone(),

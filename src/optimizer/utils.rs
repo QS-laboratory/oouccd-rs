@@ -1,4 +1,39 @@
-use ndarray::{Array2, Array4};
+use ndarray::{Array, Array2, Array4, Axis, RemoveAxis};
+
+/// exp(sum_a kappa_a G_a), in the same sign convention as givens_rotate_*.
+pub fn exponential_orbital_rotation(
+    n_orb: usize,
+    pairs: &[(usize, usize)],
+    kappa: &[f64],
+) -> Array2<f64> {
+    assert_eq!(pairs.len(), kappa.len());
+    let mut generator = nalgebra::DMatrix::<f64>::zeros(n_orb, n_orb);
+    for (&(i, j), &angle) in pairs.iter().zip(kappa) {
+        generator[(i, j)] += angle;
+        generator[(j, i)] -= angle;
+    }
+    let rotation = generator.exp();
+    Array2::from_shape_fn((n_orb, n_orb), |(i, j)| rotation[(i, j)])
+}
+
+/// Apply R to every index; never build an n^(2*rank) transformation tensor.
+pub fn rotate_tensor<D: RemoveAxis>(h: &Array<f64, D>, rotation: &Array2<f64>) -> Array<f64, D> {
+    let n = rotation.nrows();
+    assert_eq!(rotation.ncols(), n);
+    assert!(h.shape().iter().all(|&length| length == n));
+    let mut result = h.clone();
+    for axis in 0..h.ndim() {
+        let mut next = Array::zeros(h.raw_dim());
+        for i in 0..n {
+            for j in 0..n {
+                next.index_axis_mut(Axis(axis), i)
+                    .scaled_add(rotation[[i, j]], &result.index_axis(Axis(axis), j));
+            }
+        }
+        result = next;
+    }
+    result
+}
 
 /// Apply a single Givens rotation to the specified axis of a 2D tensor.
 /// The rotation mixes rows/columns `idx_i` and `idx_j` by angle `theta`.
@@ -99,6 +134,33 @@ pub fn rotate_2body_integrals(h: &mut Array4<f64>, idx_i: usize, idx_j: usize, t
 mod tests {
     use super::*;
     use ndarray::array;
+
+    #[test]
+    fn exponential_rotation_matches_single_givens_and_is_orthogonal() {
+        let pairs = [(0, 2), (1, 2)];
+        let h1 = Array2::from_shape_fn((3, 3), |(i, j)| (i * 3 + j) as f64);
+        let h2 = Array4::from_shape_fn((3, 3, 3, 3), |(i, j, k, l)| {
+            (i + 2 * j + 3 * k + 4 * l) as f64
+        });
+        let rotation = exponential_orbital_rotation(3, &pairs[..1], &[0.37]);
+        let mut reference1 = h1.clone();
+        let mut reference2 = h2.clone();
+        rotate_1body_integrals(&mut reference1, 0, 2, 0.37);
+        rotate_2body_integrals(&mut reference2, 0, 2, 0.37);
+        assert!(rotate_tensor(&h1, &rotation)
+            .iter()
+            .zip(reference1.iter())
+            .all(|(a, b)| (a - b).abs() < 1e-12));
+        assert!(rotate_tensor(&h2, &rotation)
+            .iter()
+            .zip(reference2.iter())
+            .all(|(a, b)| (a - b).abs() < 1e-12));
+        let multiple = exponential_orbital_rotation(3, &pairs, &[0.37, -0.23]);
+        let identity = multiple.dot(&multiple.t());
+        for ((i, j), v) in identity.indexed_iter() {
+            assert!((v - if i == j { 1.0 } else { 0.0 }).abs() < 1e-12);
+        }
+    }
 
     #[test]
     fn test_givens_rotate_2d() {

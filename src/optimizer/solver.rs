@@ -2,9 +2,14 @@ use crate::checkpoint::manager::Logger;
 use crate::chemistry::engine::ClassicalEngine;
 use crate::chemistry::molecular_context::MolecularContext;
 use crate::config::{
-    AnsatzConfig, MethodConfig, OrbitalOptimizerConfig, SolverConfig, UccOptimizerConfig,
+    AnsatzConfig, MethodConfig, OrbitalOptimizerConfig, OrbitalSolverConfig, RdmEvaluationConfig,
+    SolverConfig, UccOptimizerConfig,
 };
 use crate::optimizer::lbfgs::finite_diff_gradient;
+use crate::optimizer::newton::NewtonOrbitalOptimizer;
+pub use crate::optimizer::orbital::{
+    OrbitalOptimizer, OrbitalProblem, OrbitalRotation, OrbitalUpdate,
+};
 use crate::optimizer::trigonometric::minimize_trigonometric_func;
 use crate::quantum::engine::QuantumEngine;
 use crate::quantum::unitary_coupled_cluster_gates::Excitation;
@@ -29,7 +34,15 @@ pub struct Optimizer {
 }
 
 impl Optimizer {
-    pub fn build(ctx: &MolecularContext, method: &MethodConfig) -> Self {
+    pub fn build(ctx: &MolecularContext, method: &MethodConfig) -> anyhow::Result<Self> {
+        if let RdmEvaluationConfig::FiniteShot { shots, .. } = method.rdm_evaluation {
+            anyhow::ensure!(shots > 0, "finite-shot RDM evaluation requires shots > 0");
+        }
+        let orb_opt = method
+            .orbital_optimizer
+            .as_ref()
+            .map(build_orbital_optimizer)
+            .transpose()?;
         let is_singles = method.ucc_optimizer.ansatz_config == AnsatzConfig::Uccsd;
         let quantum_engine = QuantumEngine::new(
             ctx.n_orb,
@@ -51,12 +64,7 @@ impl Optimizer {
         let n_oo = oo_params_pairs.len();
 
         let ucc_opt = build_ucc_optimizer(&method.ucc_optimizer);
-        let orb_opt = method
-            .orbital_optimizer
-            .as_ref()
-            .map(|cfg| build_orbital_optimizer(cfg));
-
-        Self {
+        Ok(Self {
             classical_engine,
             quantum_engine,
             vqe_params: Array1::zeros(n_vqe),
@@ -67,7 +75,7 @@ impl Optimizer {
             energy_tolerance: method.energy_tolerance.unwrap_or(1e-6),
             ucc_opt,
             orb_opt,
-        }
+        })
     }
 
     pub fn run(&mut self, logger: &mut Logger) -> anyhow::Result<()> {
@@ -98,21 +106,21 @@ impl Optimizer {
                 let (rdm1, rdm2) = self
                     .quantum_engine
                     .get_rdm(self.vqe_params.as_slice().unwrap());
-                let pairs = &self.oo_params_pairs;
-                let engine = &self.classical_engine;
-
-                let mut eval_oo = |kappa: &[f64]| -> f64 {
-                    engine.evaluate_energy_with_kappa(&rdm1, &rdm2, pairs, kappa)
+                let problem = OrbitalProblem {
+                    engine: &self.classical_engine,
+                    rdm1: &rdm1,
+                    rdm2: &rdm2,
+                    pairs: &self.oo_params_pairs,
                 };
-
-                oo.optimize(&mut self.oo_params, &mut eval_oo);
-
-                // Apply the optimal kappa permanently
-                for (p, &angle) in self.oo_params.iter().enumerate() {
-                    let (i, k) = self.oo_params_pairs[p];
-                    self.classical_engine.rotate_electron_integrals(i, k, angle);
+                let update = oo.optimize(&problem)?;
+                if let Some(report) = &update.newton {
+                    eprintln!(
+                        "[newton] sweep={sweep} energy_before={:.12} energy_after={:.12} gradient_norm={:.6e} hessian_shift={:.6e} step_norm={:.6e} line_search_scale={:.6e} status={:?}",
+                        update.energy_before, update.energy_after, report.gradient_norm,
+                        report.hessian_shift, report.step_norm, report.line_search_scale, report.status,
+                    );
                 }
-                // Reset oo_params to zero (rotation is now baked into h1, h2)
+                update.apply(&mut self.classical_engine, &self.oo_params_pairs);
                 self.oo_params.fill(0.0);
                 eprintln!(
                     "[solver] sweep={sweep}/{} | OO done ({:.1}s)",
@@ -179,10 +187,6 @@ pub trait UccOptimizer {
     fn optimize(&self, theta: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64;
 }
 
-pub trait OrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64;
-}
-
 fn build_ucc_optimizer(config: &UccOptimizerConfig) -> Box<dyn UccOptimizer> {
     match config.solver_config {
         SolverConfig::Sequential {} => Box::new(SequentialUccOptimizer {}),
@@ -190,11 +194,21 @@ fn build_ucc_optimizer(config: &UccOptimizerConfig) -> Box<dyn UccOptimizer> {
     }
 }
 
-fn build_orbital_optimizer(config: &OrbitalOptimizerConfig) -> Box<dyn OrbitalOptimizer> {
-    match config.solver_config {
-        SolverConfig::Sequential {} => Box::new(SequentialOrbitalOptimizer {}),
-        SolverConfig::Lbfgs { max_iter } => Box::new(LbfgsOrbitalOptimizer { max_iter }),
-    }
+fn build_orbital_optimizer(
+    config: &OrbitalOptimizerConfig,
+) -> anyhow::Result<Box<dyn OrbitalOptimizer>> {
+    Ok(match &config.solver_config {
+        OrbitalSolverConfig::Sequential {} => Box::new(SequentialOrbitalOptimizer {}),
+        OrbitalSolverConfig::Lbfgs { max_iter } => Box::new(LbfgsOrbitalOptimizer {
+            max_iter: *max_iter,
+        }),
+        OrbitalSolverConfig::NewtonRaphson { options } => {
+            options.validate()?;
+            Box::new(NewtonOrbitalOptimizer {
+                options: options.clone(),
+            })
+        }
+    })
 }
 
 struct SequentialUccOptimizer;
@@ -248,9 +262,10 @@ struct LbfgsOrbitalOptimizer {
     max_iter: usize,
 }
 impl OrbitalOptimizer for LbfgsOrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
-        let problem = ArgminProblem::new(objective, 1e-5);
-        let init_param = kappa.to_vec();
+    fn optimize(&self, orbital: &OrbitalProblem<'_>) -> anyhow::Result<OrbitalUpdate> {
+        let mut objective = |kappa: &[f64]| orbital.energy_with_givens(kappa);
+        let problem = ArgminProblem::new(&mut objective, 1e-5);
+        let init_param = vec![0.0; orbital.pairs.len()];
 
         let linesearch = MoreThuenteLineSearch::new().with_c(1e-4, 0.9).unwrap();
         let solver = LBFGS::new(linesearch, 10)
@@ -259,22 +274,26 @@ impl OrbitalOptimizer for LbfgsOrbitalOptimizer {
 
         let res = Executor::new(problem, solver)
             .configure(|state| state.param(init_param).max_iters(self.max_iter as u64))
-            .run()
-            .unwrap();
+            .run()?;
 
         let x_opt = res.state().get_best_param().unwrap().clone();
         let e_opt = res.state().get_best_cost();
 
-        *kappa = Array1::from_vec(x_opt);
-        e_opt
+        Ok(OrbitalUpdate {
+            rotation: OrbitalRotation::Givens(Array1::from_vec(x_opt)),
+            energy_before: orbital.energy(),
+            energy_after: e_opt,
+            newton: None,
+        })
     }
 }
 
 struct SequentialOrbitalOptimizer;
 impl OrbitalOptimizer for SequentialOrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
+    fn optimize(&self, problem: &OrbitalProblem<'_>) -> anyhow::Result<OrbitalUpdate> {
+        let mut kappa = Array1::<f64>::zeros(problem.pairs.len());
         let n = kappa.len();
-        let mut current_energy = objective(kappa.as_slice().unwrap());
+        let energy_before = problem.energy();
 
         for p in 0..n {
             // E(κ_p) is a degree-4 Fourier polynomial (m=2 spin components → 2m=4 frequencies).
@@ -283,14 +302,19 @@ impl OrbitalOptimizer for SequentialOrbitalOptimizer {
             for j in 0..9 {
                 let mut kappa_trial = kappa.to_vec();
                 kappa_trial[p] = kappa[p] + (PI * 2.0 / 9.0) * (j as f64);
-                samples[j] = objective(&kappa_trial);
+                samples[j] = problem.energy_with_givens(&kappa_trial);
             }
-            let (opt_shift, opt_energy) = minimize_trigonometric_func(&samples);
+            let (opt_shift, _) = minimize_trigonometric_func(&samples);
             kappa[p] = (kappa[p] + opt_shift + PI).rem_euclid(2.0 * PI) - PI;
-            current_energy = opt_energy;
         }
 
-        current_energy
+        let energy_after = problem.energy_with_givens(kappa.as_slice().unwrap());
+        Ok(OrbitalUpdate {
+            rotation: OrbitalRotation::Givens(kappa),
+            energy_before,
+            energy_after,
+            newton: None,
+        })
     }
 }
 

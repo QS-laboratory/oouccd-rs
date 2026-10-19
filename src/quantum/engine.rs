@@ -1,4 +1,3 @@
-use crate::chemistry::rdm::{compute_1rdm_spatial, compute_2rdm_spatial};
 use crate::config::RdmEvaluationConfig;
 use crate::quantum::rdm_measurement::RdmMeasurementPlan;
 use crate::quantum::unitary_coupled_cluster_gates::{build_ucc_ansatz, Excitation};
@@ -18,7 +17,7 @@ pub struct QuantumEngine {
     pub n_params: usize,
     pub excitations: Vec<Excitation>,
     rdm_evaluation: RdmEvaluationConfig,
-    rdm_measurement_plan: Option<RdmMeasurementPlan>,
+    rdm_measurement_plan: RdmMeasurementPlan,
     evaluation_count: AtomicU64,
 }
 
@@ -33,10 +32,7 @@ impl QuantumEngine {
         let (ansatz_circuit, excitations, n_params) =
             build_ucc_ansatz(n_elec, n_orb, false, false, include_singles);
         let backend = Backend::new(n_qubits, None);
-        let rdm_measurement_plan = match rdm_evaluation {
-            RdmEvaluationConfig::Statevector {} => None,
-            RdmEvaluationConfig::FiniteShot { .. } => Some(RdmMeasurementPlan::new(n_orb)),
-        };
+        let rdm_measurement_plan = RdmMeasurementPlan::new(n_orb);
 
         Self {
             ansatz_circuit,
@@ -52,20 +48,15 @@ impl QuantumEngine {
 
     pub fn get_rdm(&self, theta: &[f64]) -> (Array2<f64>, Array4<f64>) {
         let state_vector = self.get_state_vector(theta);
-        let n_spatial = self.n_qubits / 2;
-
         match self.rdm_evaluation {
-            RdmEvaluationConfig::Statevector {} => (
-                compute_1rdm_spatial(&state_vector, n_spatial),
-                compute_2rdm_spatial(&state_vector, n_spatial),
-            ),
+            RdmEvaluationConfig::Statevector {} => {
+                self.rdm_measurement_plan.evaluate_exact(&state_vector)
+            }
             RdmEvaluationConfig::FiniteShot { shots, seed } => {
                 let evaluation = self.evaluation_count.fetch_add(1, Ordering::Relaxed);
                 let base_seed = seed.unwrap_or_else(rand::random);
                 let measurement_seed = base_seed.wrapping_add(evaluation);
                 self.rdm_measurement_plan
-                    .as_ref()
-                    .expect("finite-shot mode requires an RDM measurement plan")
                     .measure(&state_vector, shots, measurement_seed)
             }
         }

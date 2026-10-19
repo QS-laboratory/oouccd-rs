@@ -1,0 +1,30 @@
+{
+  "task_name": "LiH_R160_Newton_UCCD",
+  "chemistry": {
+    "geometry": "Li 0 0 0; H 0 0 1.6",
+    "basis": "sto-3g",
+    "charge": 0,
+    "spin": 0,
+    "freeze_core": 0
+  },
+  "method": {
+    "label": "OO(newton)-UCCD(seq)",
+    "max_macro_iterations": 50,
+    "energy_tolerance": 1e-8,
+    "rdm_evaluation": { "type": "statevector" },
+    "ucc_optimizer": {
+      "ansatz_config": { "type": "UCCD" },
+      "solver_config": { "type": "sequential" }
+    },
+    "orbital_optimizer": {
+      "solver_config": {
+        "type": "newton_raphson",
+        "stabilized": true,
+        "hessian_floor": 1e-4,
+        "max_step_norm": 0.2,
+        "gradient_tolerance": 1e-6,
+        "max_backtracks": 20
+      }
+    }
+  }
+}

@@ -29,7 +29,7 @@ fn run(config: &TaskConfig, logger: &mut Logger) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("PySCF Error: {}", e))?;
     eprintln!("[pyscf] done | nao={} nelec={}", ctx.n_orb, ctx.n_elec);
 
-    let mut optimizer = Optimizer::build(&ctx, &config.method);
+    let mut optimizer = Optimizer::build(&ctx, &config.method)?;
 
     optimizer.run(logger)?;
 

@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
     println!("h1: {:?}", molecule.h1.shape());
     println!("h2: {:?}", molecule.h2.shape());
 
-    let mut optimizer = Optimizer::build(&molecule, &config.method);
+    let mut optimizer = Optimizer::build(&molecule, &config.method)?;
 
     let image = circuit_to_image(
         &optimizer.quantum_engine.ansatz_circuit,
