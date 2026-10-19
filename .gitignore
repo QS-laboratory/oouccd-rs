@@ -5,6 +5,7 @@ target/
 seq-venv/
 .paper-env/
 local_runs/
+.qollage/
 infra/
 
 summary/*

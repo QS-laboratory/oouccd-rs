@@ -23,9 +23,12 @@ There are two distinct reproduction tasks:
    stopping rule. Compare numerical results, not necessarily bitwise-identical
    output or identical figure styling.
 
-The archive histories have been checked; a complete fresh 56-calculation scan
-has not been rerun as part of preparing this guide. The exact historical Python
-environment and PDF export commands are not recorded in the available metadata.
+The earlier archive audit described below used the macOS summary directory,
+including its replacement UCCSD database. A fresh 56-calculation scan on argo
+completed on October 19, 2026 (section 8). Section 9 records the subsequent
+comparison against the data actually recovered from GCS, including the missing
+replacement histories. The exact historical Python environment and PDF export
+commands are not recorded in the available metadata.
 
 All shell blocks below assume Bash. Set these variables in the same shell:
 
@@ -369,13 +372,14 @@ advertises 144 CPUs and 2,310,000 MB of schedulable memory. CPU jobs suffice
 for the supplied state-vector backend. Resource availability varies with the
 other jobs; capacity alone does not establish numerical reproducibility.
 
-This checkout (`6cd1b8b` before the argo additions) has neither `infra/` nor
+The initial checkout (`6cd1b8b` before the argo additions) had neither `infra/` nor
 `summary/results/lih_pes/`: both are ignored by Git. Therefore sections 4--6
 cannot be executed literally on a fresh clone. The original template and
 archived iteration histories must be recovered for a full historical comparison.
-The user identified the bucket `gs://example-results-bucket`; no object prefix has
-yet been established. Anonymous object listing returned HTTP 401, and no
-`gcloud` executable or user GCP credential configuration was found on argo.
+The user identified the bucket `gs://example-results-bucket`. The initial anonymous
+listing returned HTTP 401, and gcloud was not installed at that point. Gcloud
+was subsequently installed in the user's directory and authenticated; the
+recovered prefixes and numerical comparison are described in section 9.
 
 `scripts/prepare_paper_slurm.py` reconstructs all 56 inputs using the tracked
 L-BFGS-only master, the settings documented above, and the current config schema.
@@ -482,8 +486,8 @@ sacct -j "$job_id" --format=JobID,State,Elapsed,AllocCPUS,MaxRSS,ExitCode
 ```
 
 Passing the smoke check establishes reproducibility of the documented numerical
-checkpoints on the tested node. Establishing the entire paper's PES and
-iteration-history agreement still requires the full scan and the GCS archives.
+checkpoints on the tested node. The completed full scan is recorded below;
+section 9 gives the scope and limits of the historical comparison.
 
 ### Actual argo smoke result, October 19, 2026
 
@@ -504,14 +508,19 @@ step MaxRSS values were approximately 92--95 MiB. A separate argo02 preflight
 verified Python/package imports, binary startup, and runtime library resolution;
 the chemistry calculations above were performed on argo01.
 
-All 56 inputs have also been prepared in
-`local_runs/argo-full-prepared-20261019/`, but **the full scan has not been
-submitted**. Following the benchmark and the user's choice, this prepared array
-uses one CPU per task and at most 16 simultaneous tasks (16 CPUs and 64 GB
-reserved in total), with a two-hour limit per task. The directory includes
-`preflight.json`, and `sbatch --test-only` passed with the final one-CPU script.
-Fresh calculations do not need GCP authentication; archive retrieval and
-historical comparison remain separate work.
+The full workspace is `local_runs/argo-full-prepared-20261019/`. Following the
+benchmark and the user's choice, array job `10621` used one CPU per task and at
+most 16 simultaneous tasks, with 4 GB and a two-hour limit per task. All 56
+tasks completed successfully between 10:33:44 and 11:58:57 JST on October 19,
+2026. Analysis job `10638` completed at 11:59:10 JST, producing the validation
+report, PES PNG, and convergence PNG/PDF files. Of the 56 results, 53 converged;
+UCCSD at 3.0, 3.2, and 3.4 Å reached the 100-iteration limit. All satisfied the
+specified stopping rule.
+
+The calculation used the copied executable and source snapshot recorded in
+the workspace manifest, before the later development edits in this checkout.
+Fresh calculations do not need GCP authentication. The separate GCS archive
+recovery and comparison are recorded in section 9.
 
 ### Comparing one and four CPUs
 
@@ -555,5 +564,98 @@ This is not a function-level profile or a scaling result for larger molecules.
 For this 12-qubit LiH workload, use one CPU per production task. With a fixed
 16-CPU budget, 16 independent one-CPU tasks use the resources more efficiently
 than four four-CPU tasks. Batch completion time also depends on the iteration
-counts, queueing, and the longest task; it has not yet been measured for the
-full scan.
+counts, queueing, and the longest task. The subsequent measured full-scan
+wall time was 1 h 25 min 13 s, or 1 h 25 min 26 s including validation/plotting.
+
+## 9. Comparison against the recovered GCS data
+
+### Sources and retrieval
+
+Authenticated retrieval on October 19, 2026 recovered 278 files under
+`local_runs/gcs-paper-audit-20261019/raw/`. Each download was checked against
+the GCS object size and MD5; the download manifest also records object generation
+and local SHA-256. The bucket was kept private. A temporary object-reader IAM
+binding was added with the user's approval and removed immediately after the
+downloads; the before/after IAM bindings were verified to be identical.
+
+| GCS prefix under `gs://example-results-bucket/` | Retrieved data | Use |
+| --- | --- | --- |
+| `lih-pes-20250412/` | 56 inputs, 49 DBs | Earlier experiment; includes a different L-BFGS amplitude optimizer and an incomplete run |
+| `lih-pes-20260413-1259/` | 56 inputs, no DBs | Input provenance only |
+| `lih-pes-20260413-1321/` | 56 inputs and 56 completed DBs | Baseline for the comparison below |
+| `lih-pes-uccsd-recalc-100iter/` | Five inputs, no DBs | Confirms the intended UCCSD recalculation settings; no result reference recovered |
+
+The selected baseline has the four target methods and all 14 geometries. Its
+inputs agree with the reconstructed argo inputs after accounting for task names,
+the larger outer iteration budget, and explicit values for default state-vector
+and absent orbital-optimizer settings. All other physical/optimizer settings
+match. The first three section-6 checkpoints match the selected GCS baseline;
+its L-BFGS checkpoint differs from the earlier macOS archive value by about
+`1.2e-11` Ha. Thus, the exact identity of every earlier local archive file is
+not established merely by selecting this GCS prefix.
+
+### Numerical results
+
+The comparison covers all 56 method/geometry pairs and 662 shared macro-iteration
+energies. Duplicate final rows at iteration caps are collapsed. A comparison
+tolerance of `1e-8` Ha is used for final-energy agreement; this is separate from
+the optimizer stopping criterion and from the energy error relative to FCI.
+
+| Method | Comparable final energies | Maximum final difference (Ha) | Maximum shared-history difference (Ha) |
+| --- | --- | --- | --- |
+| UCCD(seq) | 14/14 | 1.47e-13 | 1.47e-13 |
+| UCCSD(seq) | 9/14 | 1.10e-13 | 5.51e-13 |
+| OO(seq)-UCCD(seq) | 14/14 | 1.31e-13 | 1.13e-9 |
+| OO(lbfgs)-UCCD(seq) | 14/14 | 5.57e-11 | 1.23e-8 |
+
+All 51 directly comparable final energies agree within the comparison tolerance,
+and their final iteration counts and convergence flags match. One of the 662
+shared iteration energies exceeds `1e-8` Ha difference: L-BFGS OO-UCCD at
+3.4 Å, iteration 2, differs by `1.23398e-8` Ha. Its final difference is only
+`3.94e-11` Ha and both runs finish at iteration 15. The trajectories are close,
+but they are not bitwise identical and should not be described as uniformly
+within `1e-8` Ha at every iteration. The cause of the intermediate differences
+has not been isolated in this comparison.
+
+The remaining five UCCSD points have different endpoints because the GCS runs
+stop at 30 iterations, while argo uses the manuscript's 100-iteration budget:
+
+| R (Å) | GCS final iteration | Argo final iteration | Argo status | Maximum difference over the first 30 iterations (Ha) |
+| --- | --- | --- | --- | --- |
+| 2.6 | 30 | 34 | Converged | 9.59e-14 |
+| 2.8 | 30 | 61 | Converged | 5.51e-13 |
+| 3.0 | 30 | 100 | Iteration limit | 1.95e-13 |
+| 3.2 | 30 | 100 | Iteration limit | 1.95e-13 |
+| 3.4 | 30 | 100 | Iteration limit | 1.19e-13 |
+
+The first 30 iterations reproduce the available GCS trajectories. The subsequent
+energies cannot be directly checked against a recovered 100-iteration GCS DB.
+Listing the entire live bucket and the archived generations under the recalc
+prefix found only the five recalc JSONs, with no recalc result DBs. The earlier
+macOS `summary/results/lih_pes/task_zz_recalc.db` described in sections 2 and 6
+is still needed to compare the five extended histories and their final energies
+against that selected paper dataset. Consequently, this audit establishes
+agreement with all available baseline GCS results, with the intermediate
+trajectory qualification above; it does not establish complete final-history
+agreement with the unrecovered local replacement database.
+
+### Repeating the comparison
+
+No additional chemistry calculations or GCS access are needed once the downloaded
+files are present:
+
+```bash
+python3 scripts/compare_paper_results.py \
+  --archive-root local_runs/gcs-paper-audit-20261019/raw/lih-pes-20260413-1321 \
+  --rerun-workspace local_runs/argo-full-prepared-20261019 \
+  --out-dir local_runs/gcs-paper-audit-20261019/comparison
+```
+
+Outputs are `comparison.json`, `points.csv` (56 rows), and
+`macro_iterations.csv` (662 rows). Input/DB integrity checks and comparable
+final-energy failures produce a nonzero exit status. Missing later reference
+iterations and intermediate trajectory deviations are explicit report fields;
+a zero exit status is not a claim that all 56 full histories are identical.
+The downloaded data and access/download manifests are retained under the audit
+directory; they are ignored by Git. A copy of the numerical report is also
+stored as `gcs-comparison.json` in the full argo workspace.

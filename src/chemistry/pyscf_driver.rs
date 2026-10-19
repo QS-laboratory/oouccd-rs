@@ -15,8 +15,8 @@ impl PyScfDriver {
 import numpy as np
 from pyscf import gto, scf, mcscf, fci, ao2mo
 
-def compute(atom_str, basis_str, mult, chg, ncore):
-    mol = gto.M(atom=atom_str, basis=basis_str, spin=mult-1, charge=chg, symmetry=False, verbose=0)
+def compute(atom_str, basis_str, spin, chg, ncore):
+    mol = gto.M(atom=atom_str, basis=basis_str, spin=spin, charge=chg, symmetry=False, verbose=0)
     mf = scf.RHF(mol)
     mf.kernel()
 
@@ -67,7 +67,7 @@ def compute(atom_str, basis_str, mult, chg, ncore):
                 .call1((
                     py_atom_str,
                     py_basis_str,
-                    config.spin + 1,
+                    config.spin,
                     config.charge,
                     config.freeze_core,
                 ))
@@ -75,12 +75,27 @@ def compute(atom_str, basis_str, mult, chg, ncore):
                 .downcast()
                 .map_err(|e| anyhow::anyhow!("Failed to downcast python result: {:?}", e))?;
 
-            let n_orb: usize = result_dict.get_item("nao")?.context("Missing nao")?.extract()?;
-            let n_elec: usize = result_dict.get_item("nelec")?.context("Missing nelec")?.extract()?;
-            let nuclear_repulsion: f64 = result_dict.get_item("enuc")?.context("Missing enuc")?.extract()?;
+            let n_orb: usize = result_dict
+                .get_item("nao")?
+                .context("Missing nao")?
+                .extract()?;
+            let n_elec: usize = result_dict
+                .get_item("nelec")?
+                .context("Missing nelec")?
+                .extract()?;
+            let nuclear_repulsion: f64 = result_dict
+                .get_item("enuc")?
+                .context("Missing enuc")?
+                .extract()?;
 
-            let h1_raw: Vec<Vec<f64>> = result_dict.get_item("h1")?.context("Missing h1")?.extract()?;
-            let eri_raw: Vec<Vec<Vec<Vec<f64>>>> = result_dict.get_item("eri")?.context("Missing eri")?.extract()?;
+            let h1_raw: Vec<Vec<f64>> = result_dict
+                .get_item("h1")?
+                .context("Missing h1")?
+                .extract()?;
+            let eri_raw: Vec<Vec<Vec<Vec<f64>>>> = result_dict
+                .get_item("eri")?
+                .context("Missing eri")?
+                .extract()?;
 
             let mut h1 = Array2::zeros((n_orb, n_orb));
             for i in 0..n_orb {
@@ -100,7 +115,13 @@ def compute(atom_str, basis_str, mult, chg, ncore):
                 }
             }
 
-            Ok(MolecularContext { n_orb, n_elec, nuclear_repulsion, h1, h2 })
+            Ok(MolecularContext {
+                n_orb,
+                n_elec,
+                nuclear_repulsion,
+                h1,
+                h2,
+            })
         })
     }
 }

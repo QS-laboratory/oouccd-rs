@@ -8,12 +8,12 @@
     "freeze_core": 0
   },
   "method": {
-    "label": "UCCD(seq)",
+    "label": "UCCSD(seq)",
     "max_macro_iterations": 10,
     "energy_tolerance": 1e-8,
     "rdm_evaluation": { "type": "statevector" },
     "ucc_optimizer": {
-      "ansatz_config": { "type": "UCCD" },
+      "ansatz_config": { "type": "UCCSD" },
       "solver_config": { "type": "sequential" }
     }
   }

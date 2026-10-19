@@ -1,6 +1,7 @@
 use oouccd_rs::chemistry::pyscf_driver::PyScfDriver;
 use oouccd_rs::optimizer::solver::Optimizer;
 use oouccd_rs::TaskContext;
+use roqollage::{circuit_to_image, RenderPragmas};
 use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,7 +30,33 @@ fn main() -> anyhow::Result<()> {
     println!("Chemistry: {:?}", &config.chemistry);
 
     let molecule = PyScfDriver::compute(&config.chemistry)?;
+
+    println!("Molecule:");
+    println!("nelec: {}, norb: {}", molecule.n_elec, molecule.n_orb);
+    println!("nuc repulsion: {}", molecule.nuclear_repulsion);
+    println!("h1: {:?}", molecule.h1.shape());
+    println!("h2: {:?}", molecule.h2.shape());
+
     let mut optimizer = Optimizer::build(&molecule, &config.method);
+
+    let image = circuit_to_image(
+        &optimizer.quantum_engine.ansatz_circuit,
+        Some(2.0),
+        RenderPragmas::None,
+        None,
+        Some(30),
+        Some(3),
+    )?;
+
+    image.save("circuit.png")?;
+    println!("excitations: {:?}", optimizer.quantum_engine.excitations);
+
+    let dummy_theta = &[1.0, 2.0, 3.0];
+    let amp = optimizer.quantum_engine.get_state_vector(dummy_theta);
+    println!("Prob. Amp.: {:?}", amp);
+    let (h1, h2) = optimizer.quantum_engine.get_rdm(dummy_theta);
+    println!("h1: {:?}", h1);
+
     let mut logger = task.get_logger(&config);
     optimizer.run(&mut logger)?;
 

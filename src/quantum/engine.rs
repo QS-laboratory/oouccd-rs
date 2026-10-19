@@ -71,7 +71,7 @@ impl QuantumEngine {
         }
     }
 
-    fn get_state_vector(&self, theta: &[f64]) -> Vec<Complex64> {
+    pub fn get_state_vector(&self, theta: &[f64]) -> Vec<Complex64> {
         let mut calc = Calculator::new();
         for (i, &t) in theta.iter().enumerate() {
             calc.set_variable(&format!("theta_{}", i), t);
