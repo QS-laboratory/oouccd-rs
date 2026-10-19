@@ -116,7 +116,7 @@ In this study, we use the first-order product (disentangled) form of the UCC ans
 \end{equation}
 where \( \theta_{\mu} \) and \( \hat{\tau}_{\mu} \) denote, respectively, an individual amplitude and excitation operator appearing in \( \hat{T}_1 \) or \( \hat{T}_2 \).
 \color{black}
-The excitation operators in the product are applied in a fixed order, with all single excitations applied first, followed by all double excitations. Within each excitation rank, the excitation operators are ordered lexicographically by the orbital indicies: \((i, a)\) for singles and \((i, j, a, b)\) for doubles, with \(i < j\) and \(a < b\).
+The excitation gates are applied to the reference state in a fixed circuit order, with all double-excitation gates applied first, followed by all single-excitation gates when present. Within each excitation rank, the gates are ordered lexicographically by the orbital indices: \((i, j, a, b)\) for doubles, with \(i < j\) and \(a < b\), and \((i, a)\) for singles. The amplitude parameters are updated in the same order during each sequential sweep.
 \color{black}
 %Each variational parameter thus occurs in a single excitation gate. This product form is the setting in which the one-parameter Fourier reconstruction used below applies directly~\cite{jager2025}
 We primarily employ the product-form unitary coupled cluster doubles (UCCD) ansatz as the base of our proposed method, retaining only double-excitation gates. For comparison and to assess the effect of orbital optimization, we also consider the corresponding product-form unitary coupled cluster singles and doubles (UCCSD) ansatz.
