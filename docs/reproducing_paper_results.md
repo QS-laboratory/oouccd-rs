@@ -386,11 +386,19 @@ manuscript, including the slowly converging stretched-bond UCCSD points.
 
 ### Dedicated environment and build
 
-The dedicated environment is under `.paper-env/`; it does not modify the
-shared `/opt/venvs/py312` environment or shell startup files. The inspected shared
+The dedicated scientific Python environment is under `.paper-env/venv`; the
+shared `/opt/venvs/py312` environment is unchanged. The inspected shared
 environment has different package versions and should not be substituted
 silently. The argo environment uses Python 3.12.3, Rust 1.99.1, and the pinned
 requirements plus Matplotlib 3.9.4. `pip check` passed.
+
+The argo development setup was subsequently simplified: Rust now uses the
+standard `~/.cargo` and `~/.rustup` locations, with `~/.cargo/env` sourced by
+the user's shell profiles. The old `.paper-env/cargo` and `.paper-env/rustup`
+paths are compatibility symlinks, so the existing paper build scripts still
+work. Code Runner invokes Cargo directly; no `run_rust_file.sh` is needed.
+The Python environment remains at its original path while paper jobs use it.
+The fresh-install recipe below also supports an isolated Rust installation.
 
 For a new installation from the repository root (skip installation steps when
 the environment already exists):

@@ -1,4 +1,15 @@
 {
     "latex-workshop.latex.outDir": "%DIR%/build/%DOCFILE%",
-    "latex-workshop.latex.autoBuild.run": "onSave"
+    "latex-workshop.latex.autoBuild.run": "onSave",
+    "code-runner.executorMap": {
+        "rust": "cd \"$workspaceRoot\" && \"$HOME/.cargo/bin/cargo\" run --release --locked --example \"$fileNameWithoutExt\""
+    },
+    "code-runner.executorMapByGlob": {
+        "main.rs": "cd \"$workspaceRoot\" && \"$HOME/.cargo/bin/cargo\" run --release --locked"
+    },
+    "code-runner.saveFileBeforeRun": true,
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.formatOnSave": true
+    }
 }
