@@ -34,7 +34,7 @@ packages and build the simulator:
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 export PYO3_PYTHON="$PWD/.venv/bin/python"
-export PYTHONPATH="$($PYO3_PYTHON -c 'import sysconfig; print(sysconfig.get_path("purelib"))')${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$("$PYO3_PYTHON" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')${PYTHONPATH:+:$PYTHONPATH}"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1
 cargo build --release --locked
 ```
