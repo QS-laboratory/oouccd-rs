@@ -5,8 +5,7 @@ use oouccd_rs::optimizer::solver::Optimizer;
 use oouccd_rs::TaskContext;
 
 fn main() -> anyhow::Result<()> {
-    let task_idx = std::env::var("BATCH_TASK_INDEX").unwrap_or_else(|_| "local".to_string());
-    eprintln!("[oouccd] task={task_idx} | starting");
+    eprintln!("[oouccd] starting");
 
     let env_config = TaskContext::build();
     let config = env_config.get_config();
@@ -14,8 +13,8 @@ fn main() -> anyhow::Result<()> {
 
     let result = run(&config, &mut logger);
     match &result {
-        Ok(()) => eprintln!("[oouccd] task={task_idx} | finished successfully"),
-        Err(e) => eprintln!("[oouccd] task={task_idx} | failed: {e}"),
+        Ok(()) => eprintln!("[oouccd] finished successfully"),
+        Err(e) => eprintln!("[oouccd] failed: {e}"),
     }
     result
 }

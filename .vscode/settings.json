@@ -1,6 +1,11 @@
 {
     "latex-workshop.latex.outDir": "%DIR%/build/%DOCFILE%",
     "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.view.pdf.viewer": "tab",
+    "workbench.editorAssociations": {
+        "*.pdf": "latex-workshop-pdf-hook",
+        "*.PDF": "latex-workshop-pdf-hook"
+    },
     "code-runner.executorMap": {
         "rust": "cd \"$workspaceRoot\" && \"$HOME/.cargo/bin/cargo\" run --release --locked --example \"$fileNameWithoutExt\""
     },

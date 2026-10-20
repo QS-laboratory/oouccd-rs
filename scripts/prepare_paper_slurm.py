@@ -47,8 +47,8 @@ def main():
     shutil.copy2(Path(__file__), work / "provenance/prepare_paper_slurm.py")
     shutil.copy2(ROOT / "scripts/check_paper_slurm.py", work / "provenance/check_paper_slurm.py")
     shutil.copy2(ROOT / "scripts/build_paper.sbatch", work / "provenance/build_paper.sbatch")
-    for name in ("plot_convergence.py", "plot_lih_pes.py"):
-        shutil.copy2(ROOT / "summary/scripts" / name, work / "provenance" / name)
+    for name in ("export_paper_results.py", "plot_paper_results.py"):
+        shutil.copy2(ROOT / "scripts" / name, work / "provenance" / name)
     for name in ("Cargo.lock", "Cargo.toml", "requirements.txt",
                  "examples/lih_paper_scan.json", "docs/reproducing_paper_results.md",
                  "docs/main_rev3.tex"):
@@ -111,7 +111,7 @@ def main():
 set -euo pipefail
 WORK={shlex.quote(str(work))}
 PY={shlex.quote(str(python))}
-unset GCS_PATH BATCH_TASK_INDEX DB_FILEPATH PYTHONHOME
+unset DB_FILEPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
 export LD_LIBRARY_PATH="$("$PY" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
@@ -147,11 +147,11 @@ unset PYTHONHOME PYTHONPATH
 export PYTHONNOUSERSITE=1 MPLBACKEND=Agg
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1
 "$PY" "$WORK/provenance/check_paper_slurm.py" "$WORK"
-mkdir -p "$WORK/figures"
-"$PY" "$WORK/provenance/plot_convergence.py" --include-fixed-orbitals --pdf --results-dir "$WORK/results" --out-dir "$WORK/figures/convergence"
 '''
     if args.scope == "full":
-        analysis += '"$PY" "$WORK/provenance/plot_lih_pes.py" --results-dir "$WORK/results" --output "$WORK/figures/lih_pes.png"\n'
+        analysis += '''"$PY" "$WORK/provenance/export_paper_results.py" "$WORK" --out-dir "$WORK/tables"
+"$PY" "$WORK/provenance/plot_paper_results.py" "$WORK/tables" --out-dir "$WORK/figures"
+'''
     (work / "analyze.sbatch").write_text(analysis)
     print(f"Prepared {args.scope}: {len(indices)} tasks in {work}")
     print(shlex.join(["sbatch", "--test-only", str(work / "run.sbatch")]))

@@ -1,6 +1,6 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Hiromichi Hayashi and Takeshi Sato.
-% Based on arXiv:2610.16032v1; excitation-gate order description corrected.
+% Based on arXiv:2610.16032v1; gate order corrected and figures regenerated.
 % See manuscript-license.md for attribution, license and version details.
 \documentclass[
  reprint,
@@ -447,6 +447,8 @@ This alternation between classical integral transformations and quantum ansatz o
 To evaluate the performance of the SOO-UCCD algorithm, we compute the potential energy surface (PES) of the lithium hydride (LiH) molecule (4 electrons, 6 spatial orbitals, STO-3G basis set) using exact state-vector simulation. All quantum circuit evaluations are performed classically without shot noise.
 Electronic integrals and full configuration interaction (FCI) reference energies are obtained from PySCF~\cite{sun2015,sun2018,sun2020}.
 The macro-iterations are repeated until the total energy change between consecutive iterations falls below a convergence threshold of \( 10^{-8} \) Hartree, or until a maximum limit of 100 macro-iterations is reached. We compare UCCD(seq), UCCSD(seq), and OO(seq)-UCCD(seq), where the labels in parentheses denote the optimizer used for the corresponding UCC amplitudes or orbital rotations. Here, ``seq'' denotes the sequential gradient-free update based on the reconstructed one-dimensional energy profile.
+The figures presented here are generated from a complete rerun of the four methods, including the L-BFGS orbital-optimization comparison, at fourteen bond lengths from 1.0 to 3.6~\AA\ in steps of 0.2~\AA.
+Both figures use the same rerun dataset. Of the 56 calculations, 53 satisfy the energy-change criterion; the UCCSD calculations at 3.0, 3.2, and 3.4~\AA\ reach the 100-macro-iteration limit.
 %
 \begin{figure}[htbp]
     \centering
@@ -499,10 +501,11 @@ to assist with language editing. All AI-assisted suggestions were critically rev
 verified by the authors, who take full responsibility for the content of the manuscript.
 
 \section*{Data Availability}
-The data and source code supporting the findings of this article are
-not publicly available at the time of publication because the source
-code is under active development. They are available from the
-corresponding author upon reasonable request.
+The source code, calculation inputs, numerical tables, and plotting scripts
+supporting this work are included in the accompanying repository at
+\url{https://github.com/QS-laboratory/oouccd-rs}.
+The figure provenance records identify the input tables and plotting code by
+their hashes and link the figures to the rerun dataset.
 
 %
 \begin{thebibliography}{99}

@@ -40,17 +40,9 @@ def references(config):
     return float(mf.e_tot),float(energy+mol.energy_nuc())
 
 
-def sanitize(value):
-    if isinstance(value,dict):
-        return {k:sanitize(v)for k,v in value.items()if k not in ['archive_root','rerun_workspace','archive_db','argo_db']}
-    if isinstance(value,list):return [sanitize(v)for v in value]
-    return value
-
-
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('workspace',type=Path);parser.add_argument('--out-dir',type=Path,required=True)
-    parser.add_argument('--historical-comparison',type=Path)
     parser.add_argument('--accounting-file',type=Path,help='sacct -P -n: JobID,State,ExitCode,ElapsedRaw,NodeList')
     args=parser.parse_args();work=args.workspace.resolve();output=args.out_dir
     manifest=json.loads((work/'manifest.json').read_text())
@@ -100,10 +92,6 @@ def main():
         'notes':['Fresh rerun, not an export of every original manuscript database.',
                  'RHF/FCI references and iteration zero recomputed with the selected PySCF environment.',
                  'Duplicate final macro rows collapsed; full parameters remain in the raw SQLite files.']}
-    if args.historical_comparison:
-        comparison=sanitize(json.loads(args.historical_comparison.read_text()))
-        (output/'historical_comparison.json').write_text(json.dumps(comparison,indent=2,allow_nan=False)+'\n')
-        provenance['historical_comparison_input_sha256']=sha(args.historical_comparison)
     if args.accounting_file:
         scheduler=[]
         for line in args.accounting_file.read_text().splitlines():

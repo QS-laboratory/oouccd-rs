@@ -2,7 +2,7 @@
 """Check a prepared Slurm workspace, including numerical 1.60 A checkpoints.
 
 Writes validation.json; exit status is nonzero for missing/invalid results or
-checkpoint energy disagreement. Full historical comparison needs the old DBs.
+checkpoint energy disagreement.
 """
 
 import argparse
@@ -77,7 +77,7 @@ def main():
     expected = list(range(56)) if manifest["scope"] == "full" else [3, 17, 31, 45]
     assert manifest["task_indices"] == expected, "Unexpected task coverage"
     report = {"scope": manifest["scope"], "results": [], "errors": [],
-              "reference_scope": "Structural/stopping checks at every point; numerical checkpoints at 1.60 A. Full historical comparison is a separate check."}
+              "reference_scope": "Structural/stopping checks at every point; numerical checkpoints at 1.60 A."}
     for index in manifest["task_indices"]:
         name = f"task_{index:03d}"
         try:

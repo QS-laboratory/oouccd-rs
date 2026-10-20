@@ -16,7 +16,7 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
-    /// Use explicit paths without reading CLI arguments or cloud environment variables.
+    /// Use explicit paths without reading CLI arguments or environment variables.
     pub fn new(config_filepath: impl AsRef<Path>, db_filepath: impl AsRef<Path>) -> Self {
         Self {
             config_filepath: config_filepath.as_ref().to_string_lossy().into_owned(),
@@ -25,13 +25,7 @@ impl TaskContext {
     }
 
     pub fn build() -> Self {
-        let mut config = Self::parse();
-        if let Ok(gcs_path) = std::env::var("GCS_PATH") {
-            let task_idx = std::env::var("BATCH_TASK_INDEX").unwrap_or_else(|_| "0".to_string());
-            let gcs_path = gcs_path.trim_end_matches('/');
-            config.db_filepath = format!("{}/task_{}/results.db", gcs_path, task_idx);
-        }
-        config
+        Self::parse()
     }
 
     pub fn get_config(&self) -> TaskConfig {

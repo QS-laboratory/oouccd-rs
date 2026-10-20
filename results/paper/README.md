@@ -17,6 +17,12 @@ recovered. See [the verification report](../../docs/verification.md).
 
 Energies are Hartree; distances are Å. `error_from_fci_hartree` is the signed
 energy difference, without a plotting floor or absolute-value transformation.
+The plotter displays positive `E - E_FCI` values on logarithmic error axes,
+using the original paper's styles without a display floor. Convergence at
+1.6 Å uses the original single-panel layout; CSV values are preserved.
+The manuscript figures are regenerated from these tables; their
+[provenance record](../../docs/figures/provenance.json) identifies input and
+output hashes and the plotting implementation.
 `converged` records the consecutive-energy criterion, not accuracy relative to
 FCI. Three UCCSD points reach the 100-macro cap. A repeated final logger row is
 collapsed in the exported histories.
@@ -40,8 +46,10 @@ python scripts/export_paper_results.py local_runs/paper-full \
   --out-dir local_runs/paper-export
 ```
 
-The exporter recomputes RHF/FCI with PySCF. Optional `--historical-comparison`
-and `--accounting-file` arguments include the corresponding audit records;
-the latter expects `sacct --format=JobID,State,ExitCode,ElapsedRaw,NodeList -P -n`.
+The exporter recomputes RHF/FCI with PySCF. Optional `--accounting-file` adds
+scheduler records from
+`sacct --format=JobID,State,ExitCode,ElapsedRaw,NodeList -P -n`.
+The included historical comparison is a retained verification record; the
+private-archive comparison tool is no longer part of the reproduction workflow.
 The original raw databases, configs and full logs remain in the producing
 workspace, and can be regenerated using the tracked scan template.

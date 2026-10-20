@@ -1,8 +1,7 @@
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use ndarray::Array1;
 
 use crate::config::TaskConfig;
-use crate::checkpoint::gcs::GcsHandler;
 use crate::checkpoint::sqlite::SqliteHandler;
 
 pub enum LoggerMessage {
@@ -28,28 +27,13 @@ pub struct Logger {
 impl Logger {
     pub fn build(
         config: &TaskConfig,
-        db_uri: &str,
+        db_filepath: &str,
     ) -> Result<Self> {
-        let is_cloud = db_uri.starts_with("gs://");
-        let db_filename = if is_cloud {
-            "results.db".to_string()
-        } else {
-            db_uri.to_string()
-        };
-
-        let gcs = if is_cloud {
-
-            let path_without_scheme = &db_uri[5..];
-            let (bucket_name, target_gcs_path) = match path_without_scheme.find('/') {
-                Some(idx) => (&path_without_scheme[..idx], &path_without_scheme[idx + 1..]),
-                None => (path_without_scheme, ""),
-            };
-            Some(GcsHandler::new(bucket_name, &db_filename, target_gcs_path))
-        } else {
-            None
-        };
-
-        let mut sqlite = SqliteHandler::new(&db_filename, config)?;
+        ensure!(
+            !db_filepath.contains("://"),
+            "Only local SQLite file paths are supported; storage URIs are not accepted"
+        );
+        let mut sqlite = SqliteHandler::new(db_filepath, config)?;
 
         let (tx, rx) = std::sync::mpsc::sync_channel::<LoggerMessage>(100);
 
@@ -78,10 +62,6 @@ impl Logger {
                             &ucc_params,
                             is_completed,
                         );
-
-                        if let Some(ref g) = gcs {
-                            let _ = g.save_checkpoint(is_completed);
-                        }
 
                     }
                 }

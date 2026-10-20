@@ -94,15 +94,15 @@ the historical comparison was regenerated. Its 51 comparable endpoints and
 reported limitations were confirmed. The tracked scan template generated inputs
 identical to all 56 saved rerun configurations.
 
-The current main branch was rebuilt on Slurm. All 22 library tests passed,
+At this publication-preparation check, main was rebuilt on Slurm. All 22 library tests passed,
 both maintained examples compiled, and the CLI/API H2 examples both converged
 to `-1.1372838344884912` Ha in two macros. A fresh four-task LiH array at
 1.6 Å passed all checkpoints; its largest reference-energy deviation was
 `1.1191048088221578e-13` Ha. Macro counts were 4, 7, 7 and 7 for the four
 methods listed above. This is a new four-point check, not a new 56-point scan.
 
-Portable CSV plots were rendered and inspected. The database convergence
-plotter was additionally run across all 56 histories, producing 28 figures;
+Portable CSV plots were rendered and inspected. Before pipeline consolidation,
+the database convergence plotter was run across all 56 histories, producing 28 figures;
 the three capped UCCSD histories end at macro 100 after duplicate-row removal.
 Citation metadata passed CFF schema 1.2.0 validation, and a clean dependency
 resolution of `requirements.txt` succeeded without changing the running
@@ -110,13 +110,88 @@ scientific environment.
 
 Machine-readable results and scheduler outcomes are in
 [`public_release_checks.json`](../results/paper/public_release_checks.json).
-LaTeX compilation was not rerun because `latexmk` is not installed in the
-validation environment; manuscript source and referenced figures were retained.
+At that earlier check, LaTeX compilation was not rerun because `latexmk` was
+not installed. The subsequent figure-update typesetting check is recorded below.
 
-## Public history cleanup
+## Unified pipeline recheck (2026-10-20)
 
-Recorded source identifiers above refer to the original execution history.
-[History and provenance](history-rewrite.md) and the
-[commit mapping](history-commit-map.csv) identify their rewritten public commits.
-The numerical Rust sources and Cargo lockfile were compared at every original
-commit and are unchanged. Original run records and hashes are retained.
+After removing the unused custom L-BFGS implementation, the release build
+succeeded, all 22 library tests passed and both maintained examples compiled.
+The central finite-difference function and the active `argmin` optimizer were retained.
+
+The generated full-analysis job was tested on copies of the 56 existing
+completed databases, preserving their original source and executable provenance.
+It validated all tasks, exported 56 endpoints and 963 history rows, and plotted
+the CSVs. Every exported numeric value matched the included tables exactly.
+This postprocessing check does not represent 56 new VQE calculations.
+
+The PES and convergence energy-error curves were checked against the CSV
+energies and FCI references at 71 plotted points. Both error plots display
+`E - E_FCI` as in the original paper; convergence uses a single panel.
+Original databases and published numerical/provenance files were left unchanged.
+
+A fresh four-task Slurm smoke array using the rebuilt executable also passed.
+All four methods converged at 1.6 Å with the same macro counts (4, 7, 7, 7);
+the largest checkpoint-energy difference was `1.119e-13` Ha.
+Smoke analysis validated the four tasks without requesting a full CSV export.
+
+## Manuscript figure update (2026-10-20)
+
+The manuscript's previous arXiv v1 figure assets were replaced by figures
+regenerated from the included local-rerun tables. Both PES and 1.6 Å convergence
+use the complete Slurm rerun dataset described above. The captions and Results
+section identify that dataset, the 53 converged points and three capped points.
+The original arXiv v1 record was not modified.
+
+[Figure provenance](figures/provenance.json) records the two CSV hashes,
+upstream dataset provenance, plotting-script hash, Python/Matplotlib versions
+and four output hashes. The 71 plotted energy-error points were checked against
+the tables. Fonts are embedded in the PDFs; the regenerated assets use a
+layout matching the original paper, including its colors, line styles,
+markers, legends, font sizes and axis labels. The PES has the original
+1.8:1 panel-height ratio; convergence retains its original single panel.
+
+The updated manuscript compiled with an isolated Tectonic 0.17.0 installation.
+Its eight-page PDF was inspected at the page containing both figures; figure
+labels and captions were readable, and no references remained unresolved.
+There is an existing 3.88 pt overfull box in a mathematical expression, unrelated
+to the figure replacement. The default `docs/build.sh` still uses `latexmk`.
+
+## Local-only output check (2026-10-20)
+
+After replacing the manuscript figures, GCS authentication/upload code and its
+direct HTTP/URL-encoding dependencies were removed from main. Remaining package
+versions were retained. Numerical integral, circuit and optimizer algorithms
+were not changed by this removal.
+
+The release build, 22 library tests and both example builds passed. CLI and API
+H2 calculations both returned `-1.1372838344884912` Ha. A CLI run with legacy
+cloud-launcher variables still wrote to its explicit local SQLite path; storage
+URIs were rejected before calculation. Original numerical tables and their
+provenance records remained unchanged.
+
+## History and provenance
+
+Before publication, history was rewritten to remove downloaded article PDFs,
+submission correspondence, old drafts, generated manuscript products, caches
+and a compiled development executable. Personal paths and a private storage
+identifier were replaced in old text files. Author identities, emails and
+timestamps were retained.
+
+The [commit mapping](history-commit-map.csv) covers all 42 original commits.
+The numerical Rust sources and Cargo lockfile at each mapped original commit
+were verified against the pre-rewrite backup. This describes the historical
+mapping, not a requirement that later maintenance commits retain unused code.
+The annotated `pre-newton-oo` tag retains its baseline meaning and annotation,
+now pointing to `e0e0a8e9c419d79f74cdaa0abbab5a06cc04fbc4`.
+
+Original execution identifiers, source patches, binary hashes and result hashes
+remain in their run records. They were not rewritten to suggest a new execution.
+The dataset's [history mapping](../results/paper/history_rewrite.json) identifies
+its public source commits. Keep the mapping while these old identifiers are
+referenced. The prose can later be shortened or archived without discarding
+numerical data and their provenance.
+
+Private-archive comparison tooling has been retired. The previously recorded
+comparison report remains as verification evidence; new reproduction runs use
+public inputs, tables and numerical checkpoints.

@@ -1,0 +1,34 @@
+{
+  "inputs_sha256": {
+    "energies.csv": "137550e0a9f931f43ac08809c89170553fc802a088f9acbb37c00a4985cbbd0d",
+    "macro_iterations.csv": "6da4ddc87ae134ef85da15c093459382d900b4ada2875839b204b7a79d86cc14"
+  },
+  "plot_script": "plot_paper_results.py",
+  "plot_script_sha256": "9c8adf7e905225f4567ec7e133bf5731c9c52ae9b19fd7556eeb36edc69349c0",
+  "software": {
+    "python": "3.12.3",
+    "matplotlib": "3.9.4"
+  },
+  "style_reference": {
+    "preprint": "arXiv:2610.16032v1",
+    "original_figure_sha256": {
+      "lih_pes.pdf": "bed3ad99e40805480af1efde8e6d011ac48f4c593eb9f4e659d08b79cf32a086",
+      "lih_R016_convergence.pdf": "b39aaa6047dc8089e5cec128e8873e5a520d0b26631560eeb6ff7d60e10bb93e"
+    }
+  },
+  "display": {
+    "energy_error": "E - E_FCI",
+    "error_floor_hartree": null,
+    "pes_layout": "two panels, height ratio 1.8:1",
+    "convergence_layout": "one panel"
+  },
+  "outputs_sha256": {
+    "lih_pes.png": "5f6f5c392c9022e4338a348f1c370f7ff76386789f4e5db6187c4e0402d9ff03",
+    "lih_pes.pdf": "2c5e6a9dc10810fdd67704f2de7e29e78a0355abe8684edb31526c27d5b2a0dc",
+    "lih_R016_convergence.png": "423a5a621b56d1551061ec57f9cc39e9d8e204df2f956048b938772c9d169197",
+    "lih_R016_convergence.pdf": "431f0eefaf34d14dd45826648556b29d8c60a67bec7644909cac8fc8a52edc61"
+  },
+  "dataset_provenance_sha256": "61bab1c58a2dee9c338f2a6eb800749ade7fec0f961d97753a5308236f6c229a",
+  "dataset_source_commit": "6cd1b8b0c49c07439f7385eb2d99416fc3587b15",
+  "dataset_binary_sha256": "4c400b643a08b90f511f2396252ce3d8dadde41c47a14e8b2067d3a85d71b6a0"
+}

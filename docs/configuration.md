@@ -95,7 +95,6 @@ collapse identical macro indices. A database is not an optimizer checkpoint:
 reusing matching conditions appends histories from a new zero-initialized run.
 
 `--db-filepath` defaults to `results.db`; `DB_FILEPATH` can supply that default.
-If `GCS_PATH` is set, it overrides local output and uses `BATCH_TASK_INDEX` to
-choose the object. Local and Slurm commands therefore unset these cloud
-variables explicitly. GCS support is optional and requires appropriate Google
-credentials; the paper reproduction workflow uses only local SQLite files.
+The application writes local SQLite files only and rejects storage URIs.
+Choose a fresh path for each run. Environment variables from old cloud
+launchers do not override the selected local output path.

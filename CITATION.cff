@@ -20,4 +20,4 @@ preferred-citation:
   month: 10
   url: "https://arxiv.org/abs/2610.16032"
   license: CC-BY-4.0
-  notes: "arXiv:2610.16032. Included author source corrects the excitation-gate order description relative to v1."
+  notes: "arXiv:2610.16032. Included author revision corrects the gate-order description and regenerates figures from the local rerun dataset."

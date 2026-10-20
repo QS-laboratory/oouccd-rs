@@ -19,7 +19,7 @@ cp "$REFERENCE/bin/oouccd-rs" "$WORK/bin/oouccd-rs"
 cp "$REFERENCE/manifest.json" "$WORK/paper-manifest.json"
 cp "$0" "$WORK/benchmark.sbatch"
 PY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["python"])' "$REFERENCE/manifest.json")"
-unset GCS_PATH BATCH_TASK_INDEX DB_FILEPATH PYTHONHOME
+unset DB_FILEPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1

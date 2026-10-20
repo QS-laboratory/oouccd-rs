@@ -89,7 +89,7 @@ The preparer creates a **new** workspace, all 56 input JSONs, a copied binary,
 environment/source records, `run.sbatch` and `analyze.sbatch`. The smoke array
 selects only indices 3, 17, 31 and 45. It does not submit jobs by itself.
 Generated scripts limit BLAS/OpenMP threads to one and use the requested CPUs
-for Rayon. Cloud-output environment variables are unset.
+for Rayon. Each task selects its local SQLite path explicitly.
 
 Inspect the scheduler and logs:
 
@@ -101,7 +101,8 @@ cat local_runs/paper-smoke/validation.json
 
 The analysis job requires every selected result and validates SQLite integrity,
 method/geometry/mode, history continuity, energy monotonicity, stopping flags
-and the four 1.6 Å reference energies. It also plots convergence histories.
+and the four 1.6 Å reference energies. Smoke analysis performs validation only;
+CSV export and plotting require the full scan.
 An `afterok` dependency prevents analysis after failed array tasks.
 
 ## 3. Run all 56 calculations
@@ -129,66 +130,79 @@ overwrite or resume a previous database. Preserve logs, actual configs,
 The source snapshot includes uncommitted files, with file hashes, so its
 contents are not inferred from a commit ID alone.
 
-## 4. Validate and plot
+## 4. Inspect tables and figures
 
-Checks can be run independently of the analysis job:
+The full analysis job runs a single pipeline: **SQLite → CSV → figures**.
+It first validates all 56 databases, exports portable tables while recomputing
+RHF/FCI references, and then plots those tables. The exporter opens databases
+read-only. The plotter uses only CSV files and Matplotlib.
+
+| Output | Contents |
+|---|---|
+| `validation.json` | Per-task validation and numerical checkpoints at 1.6 Å |
+| `tables/energies.csv` | Endpoint energies, RHF/FCI references and stopping information |
+| `tables/macro_iterations.csv` | Unique energy histories, including recomputed RHF iteration zero |
+| `tables/provenance.json` | Actual source, executable, input and result hashes |
+| `figures/lih_pes.png`, `figures/lih_pes.pdf` | PES and absolute FCI energy errors for UCCD, UCCSD and sequential OO-UCCD |
+| `figures/lih_R016_convergence.png`, `figures/lih_R016_convergence.pdf` | FCI energy errors for all four methods at 1.6 Å, in one panel |
+| `figures/provenance.json` | Input-table, plotting-script and output hashes, plus software versions |
+
+The figures retain the original paper's layout, colors, line styles, markers,
+legend order, fonts and axis labels. The PES has two panels with height ratio
+1.8:1; convergence at 1.6 Å uses a single panel including RHF iteration zero.
+Logarithmic error axes show `E - E_FCI` without a display floor or absolute-value
+transformation. The plotter requires positive finite errors, as in the original
+paper's convergence plot. Input table values are unchanged.
+
+The full analysis creates a new `tables/` directory and refuses to overwrite an
+existing export. If analysis fails, inspect its log before retrying. Source
+copies of the exporter, checker and plotter are saved in `provenance/` so the
+analysis does not depend on later edits to repository scripts.
+
+## 5. Manual validation, export and plotting
+
+For a recheck that preserves an existing validation report:
 
 ```bash
-"$PYO3_PYTHON" scripts/check_paper_slurm.py local_runs/paper-full
+"$PYO3_PYTHON" scripts/check_paper_slurm.py local_runs/paper-full \
+  --report local_runs/paper-full/recheck.json
 ```
 
-Use `--report another/path.json` for a read-only recheck that leaves the old
-validation report intact. Checks use read-only SQLite connections.
-
-The existing database plotters are:
+To export a completed full scan again, choose a new directory:
 
 ```bash
-MPLBACKEND=Agg "$PYO3_PYTHON" summary/scripts/plot_lih_pes.py \
-  --results-dir local_runs/paper-full/results \
-  --output local_runs/paper-full/figures/lih_pes.png
-MPLBACKEND=Agg "$PYO3_PYTHON" summary/scripts/plot_convergence.py \
-  --include-fixed-orbitals --pdf \
-  --results-dir local_runs/paper-full/results \
-  --out-dir local_runs/paper-full/figures/convergence
+"$PYO3_PYTHON" scripts/export_paper_results.py local_runs/paper-full \
+  --out-dir local_runs/paper-export
+"$PYO3_PYTHON" scripts/plot_paper_results.py local_runs/paper-export \
+  --out-dir local_runs/paper-figures
 ```
 
-They recompute RHF/FCI references with PySCF. The PES displays UCCD, UCCSD and
-sequential OO-UCCD. Convergence at 1.6 Å comes from the same scan; a separate
-simulation is unnecessary. Duplicate final macro rows at the iteration cap
-must be collapsed when processing histories.
+The exporter requires all 56 tasks; a four-point smoke scan is not a complete
+input. Keep the raw databases, inputs, manifest and source/environment records
+alongside exported tables. Optional `--accounting-file` adds validated scheduler
+records; see [the dataset description](../results/paper/README.md).
 
-To inspect the published compact tables without running quantum simulations:
+To plot the included validated tables without running VQE:
 
 ```bash
 "$PYO3_PYTHON" scripts/plot_paper_results.py results/paper \
-  --out-dir local_runs/paper-table-figures
+  --out-dir local_runs/included-paper-figures
 ```
 
-## 5. Comparison with historical results
+The recorded verification and its limits are documented in
+[verification.md](verification.md). Reproduction uses the public scan inputs,
+tables and numerical checkpoints; no private historical archive is required.
 
-The repository contains compact numerical evidence from the verified Slurm
-scan under [results/paper](../results/paper/), including endpoint energies,
-unique macro histories, scheduler outcomes and sanitized historical comparisons.
-Original databases and environment snapshots are retained locally but are not
-required to view these tables.
+## Figures included in the manuscript
 
-If the historical SQLite/config archive is available independently, compare it
-with a full rerun using:
+The manuscript assets in `docs/figures/` are generated from the same included
+56-task local-rerun dataset used by the public numerical tables. To regenerate
+them with the pinned Python environment:
 
 ```bash
-"$PYO3_PYTHON" scripts/compare_paper_results.py \
-  --archive-root /path/to/historical-archive \
-  --rerun-workspace local_runs/paper-full \
-  --out-dir local_runs/paper-comparison
+"$PYO3_PYTHON" scripts/plot_paper_results.py results/paper --out-dir docs/figures
 ```
 
-This script does not download data or alter cloud permissions. It checks all
-56 physical inputs, separates same-endpoint comparisons from extended runs,
-and reports intermediate-history deviations. Five recovered UCCSD histories
-end at 30 macros, while the paper protocol allows 100; their later historical
-replacement histories were not recovered. Do not describe the available
-comparison as complete agreement of all 56 historical final energies.
-
-Numerical reproduction concerns energies, settings and stopping behavior.
-Neither bitwise-identical intermediate trajectories nor pixel-identical
-historical PDF rendering is established.
+This replaces the figure assets and their `provenance.json`. Inspect the figures
+and their hashes before using a new dataset in the manuscript. The arXiv v1
+record is unchanged; see [manuscript version details](manuscript-license.md).
