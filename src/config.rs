@@ -90,6 +90,71 @@ pub struct OrbitalOptimizerConfig {
     pub solver_config: OrbitalSolverConfig,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RdmMitigation {
+    #[default]
+    None,
+    Affine,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OoAcceptance {
+    #[default]
+    Nominal,
+    SplitNominal,
+    Heldout,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
+pub struct OrbitalStatisticsConfig {
+    pub mitigation: RdmMitigation,
+    pub acceptance: OoAcceptance,
+    pub training_fraction: f64,
+    pub trajectory_alpha: f64,
+    pub min_improvement_ha: f64,
+    pub split_seed: u64,
+    pub record_counts: bool,
+}
+
+impl Default for OrbitalStatisticsConfig {
+    fn default() -> Self {
+        Self {
+            mitigation: RdmMitigation::None,
+            acceptance: OoAcceptance::Nominal,
+            training_fraction: 0.8,
+            trajectory_alpha: 0.05,
+            min_improvement_ha: 0.0,
+            split_seed: 0x9e3779b97f4a7c15,
+            record_counts: false,
+        }
+    }
+}
+
+impl OrbitalStatisticsConfig {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.training_fraction.is_finite()
+                && self.training_fraction > 0.0
+                && self.training_fraction < 1.0,
+            "OO training_fraction must lie strictly between zero and one"
+        );
+        anyhow::ensure!(
+            self.trajectory_alpha.is_finite()
+                && self.trajectory_alpha > 0.0
+                && self.trajectory_alpha < 1.0,
+            "OO trajectory_alpha must lie strictly between zero and one"
+        );
+        anyhow::ensure!(
+            self.min_improvement_ha.is_finite() && self.min_improvement_ha >= 0.0,
+            "OO min_improvement_ha must be finite and nonnegative"
+        );
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct UccOptimizerConfig {
     pub solver_config: SolverConfig,
@@ -118,6 +183,8 @@ pub struct MethodConfig {
     pub orbital_optimizer: Option<OrbitalOptimizerConfig>,
     #[serde(default)]
     pub rdm_evaluation: RdmEvaluationConfig,
+    #[serde(default)]
+    pub orbital_statistics: OrbitalStatisticsConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -170,6 +237,10 @@ impl TaskConfig {
         conditions.insert(
             "orbital_optimizer".to_string(),
             serde_json::json!(self.method.orbital_optimizer),
+        );
+        conditions.insert(
+            "orbital_statistics".to_string(),
+            serde_json::json!(self.method.orbital_statistics),
         );
         conditions.insert(
             "max_macro_iterations".to_string(),

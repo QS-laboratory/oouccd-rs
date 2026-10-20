@@ -9,3 +9,5 @@
 ビルドには TeX Live の `latexmk` と、原稿が使用する LaTeX パッケージが必要です。ビルドは `docs/` を作業ディレクトリとして実行するため、原稿中の `figures/...` の参照を変更する必要はありません。
 
 数値計算のPauli RDM共通化、Newton OOの設定・検証方法は [newton_oo.md](newton_oo.md) を参照してください。
+
+RDMの制約付き再構成、共有RDMの共分散伝播、統計的不確かさを考慮したOOと比較実験の実行方法は [uncertainty_oo.md](uncertainty_oo.md) にまとめています。

@@ -41,6 +41,16 @@ impl ClassicalEngine {
         pairs: &[(usize, usize)],
         kappa: &[f64],
     ) -> f64 {
+        let (h1, h2) = self.integrals_with_givens(pairs, kappa);
+        self.nuclear_repulsion + (&h1 * rdm1).sum() + (&h2 * rdm2).sum()
+    }
+
+    pub fn integrals_with_givens(
+        &self,
+        pairs: &[(usize, usize)],
+        kappa: &[f64],
+    ) -> (Array2<f64>, Array4<f64>) {
+        assert_eq!(pairs.len(), kappa.len());
         let mut h1 = self.h1.clone();
         let mut h2 = self.h2.clone();
         for (p, &angle) in kappa.iter().enumerate() {
@@ -48,7 +58,7 @@ impl ClassicalEngine {
             rotate_1body_integrals(&mut h1, i, k, angle);
             rotate_2body_integrals(&mut h2, i, k, angle);
         }
-        self.nuclear_repulsion + (&h1 * rdm1).sum() + (&h2 * rdm2).sum()
+        (h1, h2)
     }
 
     pub fn rotate_electron_integrals(&mut self, i: usize, k: usize, angle: f64) {

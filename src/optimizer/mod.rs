@@ -1,6 +1,9 @@
 pub mod lbfgs;
 pub mod newton;
 pub mod orbital;
+pub mod risk_proposal;
 pub mod solver;
+pub mod statistical_oo;
 pub mod trigonometric;
+pub mod uncertainty;
 pub mod utils;

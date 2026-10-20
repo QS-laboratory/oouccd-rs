@@ -1,5 +1,6 @@
 use crate::config::RdmEvaluationConfig;
 use crate::quantum::rdm_measurement::RdmMeasurementPlan;
+use crate::quantum::rdm_statistics::PauliSamples;
 use crate::quantum::unitary_coupled_cluster_gates::{build_ucc_ansatz, Excitation};
 use ndarray::{Array2, Array4};
 use num_complex::Complex64;
@@ -47,17 +48,28 @@ impl QuantumEngine {
     }
 
     pub fn get_rdm(&self, theta: &[f64]) -> (Array2<f64>, Array4<f64>) {
+        self.rdm_measurement_plan
+            .reconstruct(&self.get_pauli_samples(theta).means)
+    }
+
+    pub fn measurement_plan(&self) -> &RdmMeasurementPlan {
+        &self.rdm_measurement_plan
+    }
+    pub fn sampled_batch_count(&self) -> u64 {
+        self.evaluation_count.load(Ordering::Relaxed)
+    }
+
+    pub fn get_pauli_samples(&self, theta: &[f64]) -> PauliSamples {
         let state_vector = self.get_state_vector(theta);
+        let exact = self.rdm_measurement_plan.exact_expectations(&state_vector);
         match self.rdm_evaluation {
-            RdmEvaluationConfig::Statevector {} => {
-                self.rdm_measurement_plan.evaluate_exact(&state_vector)
-            }
+            RdmEvaluationConfig::Statevector {} => PauliSamples::exact(exact),
             RdmEvaluationConfig::FiniteShot { shots, seed } => {
                 let evaluation = self.evaluation_count.fetch_add(1, Ordering::Relaxed);
                 let base_seed = seed.unwrap_or_else(rand::random);
                 let measurement_seed = base_seed.wrapping_add(evaluation);
                 self.rdm_measurement_plan
-                    .measure(&state_vector, shots, measurement_seed)
+                    .sample_expectations(&exact, shots, measurement_seed)
             }
         }
     }

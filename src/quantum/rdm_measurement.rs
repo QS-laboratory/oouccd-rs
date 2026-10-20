@@ -6,26 +6,35 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_distr::Binomial;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct CompiledPauliWord {
-    x_mask: usize,
-    y_mask: usize,
-    z_mask: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct CompiledPauliWord {
+    pub x_mask: usize,
+    pub y_mask: usize,
+    pub z_mask: usize,
 }
 
-#[derive(Debug, Clone)]
-struct ObservablePlan {
-    terms: Vec<(usize, f64)>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObservablePlan {
+    pub terms: Vec<(usize, f64)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RdmMeasurementPlan {
     n_spatial: usize,
     pauli_words: Vec<CompiledPauliWord>,
     one_body: Vec<ObservablePlan>,
     two_body: Vec<ObservablePlan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpinRdmPlans {
+    pub n_spin: usize,
+    pub pairs: Vec<(usize, usize)>,
+    pub one_body: Vec<ObservablePlan>,
+    pub pair_body: Vec<ObservablePlan>,
 }
 
 impl RdmMeasurementPlan {
@@ -98,7 +107,7 @@ impl RdmMeasurementPlan {
         self.reconstruct(&self.exact_expectations(state))
     }
 
-    fn exact_expectations(&self, state: &[Complex64]) -> Vec<f64> {
+    pub fn exact_expectations(&self, state: &[Complex64]) -> Vec<f64> {
         assert_eq!(state.len(), 1usize << (2 * self.n_spatial));
         self.pauli_words
             .par_iter()
@@ -112,19 +121,36 @@ impl RdmMeasurementPlan {
         shots: usize,
         seed: u64,
     ) -> (Array2<f64>, Array4<f64>) {
-        assert!(shots > 0, "finite-shot RDM evaluation requires shots > 0");
-
-        let exact_expectations = self.exact_expectations(state);
-        let mut rng = StdRng::seed_from_u64(seed);
-        let sampled_expectations: Vec<f64> = exact_expectations
-            .into_iter()
-            .map(|expectation| sample_expectation(expectation, shots, &mut rng))
-            .collect();
-
-        self.reconstruct(&sampled_expectations)
+        let samples = self.sample_expectations(&self.exact_expectations(state), shots, seed);
+        self.reconstruct(&samples.means)
     }
 
-    fn reconstruct(&self, expectations: &[f64]) -> (Array2<f64>, Array4<f64>) {
+    /// Retain sufficient statistics without changing the legacy RNG order.
+    pub fn sample_expectations(
+        &self,
+        expectations: &[f64],
+        shots: usize,
+        seed: u64,
+    ) -> crate::quantum::rdm_statistics::PauliSamples {
+        assert!(shots > 0, "finite-shot RDM evaluation requires shots > 0");
+        assert_eq!(expectations.len(), self.pauli_words.len());
+        let mut rng = StdRng::seed_from_u64(seed);
+        let plus_counts: Vec<u64> = expectations
+            .iter()
+            .map(|&expectation| {
+                Binomial::new(shots as u64, 0.5 * (1.0 + expectation))
+                    .expect("invalid binomial parameters")
+                    .sample(&mut rng)
+            })
+            .collect();
+        let mut samples =
+            crate::quantum::rdm_statistics::PauliSamples::from_counts(shots as u64, plus_counts);
+        samples.sampling_seed = Some(seed);
+        samples
+    }
+
+    pub fn reconstruct(&self, expectations: &[f64]) -> (Array2<f64>, Array4<f64>) {
+        assert_eq!(expectations.len(), self.pauli_words.len());
         let mut gamma1 = Array2::<f64>::zeros((self.n_spatial, self.n_spatial));
         for p in 0..self.n_spatial {
             for q in 0..self.n_spatial {
@@ -165,6 +191,106 @@ impl RdmMeasurementPlan {
             .iter()
             .filter(|word| word.x_mask | word.y_mask | word.z_mask != 0)
             .count()
+    }
+
+    pub fn n_spatial(&self) -> usize {
+        self.n_spatial
+    }
+    pub fn pauli_words(&self) -> &[CompiledPauliWord] {
+        &self.pauli_words
+    }
+    pub fn one_body(&self) -> &[ObservablePlan] {
+        &self.one_body
+    }
+    pub fn two_body(&self) -> &[ObservablePlan] {
+        &self.two_body
+    }
+
+    /// Real, Sz-conserving spin-orbital marginals from the existing catalog.
+    /// A missing word is an error; this API never silently requests new shots.
+    pub fn spin_plans(&self) -> anyhow::Result<SpinRdmPlans> {
+        let n = 2 * self.n_spatial;
+        let pairs: Vec<_> = (0..n)
+            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+            .collect();
+        let lookup: BTreeMap<_, _> = self
+            .pauli_words
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, w)| (w, i))
+            .collect();
+        let compile = |ops: &[(usize, FermionAction)]| -> anyhow::Result<ObservablePlan> {
+            let mut terms = Vec::new();
+            for (word, c) in transform_hermitian_part(ops) {
+                if c.re.abs() < 1e-12 {
+                    continue;
+                }
+                let index = lookup.get(&compile_word(&word)).ok_or_else(|| {
+                    anyhow::anyhow!("Spin-RDM constraint requires an unmeasured Pauli word")
+                })?;
+                terms.push((*index, c.re));
+            }
+            terms.sort_by_key(|&(i, _)| i);
+            Ok(ObservablePlan { terms })
+        };
+        let mut one_body = Vec::new();
+        for i in 0..n {
+            for j in 0..n {
+                one_body.push(if i % 2 == j % 2 {
+                    compile(&[(i, FermionAction::Create), (j, FermionAction::Annihilate)])?
+                } else {
+                    ObservablePlan { terms: Vec::new() }
+                });
+            }
+        }
+        let mut pair_body = Vec::new();
+        for &(i, j) in &pairs {
+            for &(k, l) in &pairs {
+                pair_body.push(if i % 2 + j % 2 == k % 2 + l % 2 {
+                    compile(&[
+                        (i, FermionAction::Create),
+                        (j, FermionAction::Create),
+                        (l, FermionAction::Annihilate),
+                        (k, FermionAction::Annihilate),
+                    ])?
+                } else {
+                    ObservablePlan { terms: Vec::new() }
+                });
+            }
+        }
+        Ok(SpinRdmPlans {
+            n_spin: n,
+            pairs,
+            one_body,
+            pair_body,
+        })
+    }
+
+    /// Coefficients in E = E_nuc + weights · Pauli means, including the identity.
+    pub fn energy_weights(&self, h1: &Array2<f64>, h2: &Array4<f64>) -> Vec<f64> {
+        assert_eq!(h1.dim(), (self.n_spatial, self.n_spatial));
+        assert_eq!(
+            h2.dim(),
+            (
+                self.n_spatial,
+                self.n_spatial,
+                self.n_spatial,
+                self.n_spatial
+            )
+        );
+        let mut weights = vec![0.0; self.pauli_words.len()];
+        for (observable, &coefficient) in self
+            .one_body
+            .iter()
+            .zip(h1.iter())
+            .chain(self.two_body.iter().zip(h2.iter()))
+        {
+            for &(index, scale) in &observable.terms {
+                weights[index] += coefficient * scale;
+            }
+        }
+        weights
     }
 }
 
@@ -210,6 +336,7 @@ fn evaluate_plan(plan: &ObservablePlan, sampled_expectations: &[f64]) -> f64 {
         .sum()
 }
 
+#[cfg(test)]
 fn sample_expectation(expectation: f64, shots: usize, rng: &mut StdRng) -> f64 {
     let probability_plus = 0.5 * (1.0 + expectation);
     let plus_count = Binomial::new(shots as u64, probability_plus)

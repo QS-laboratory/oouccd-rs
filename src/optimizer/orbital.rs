@@ -25,6 +25,7 @@ impl OrbitalProblem<'_> {
     }
 }
 
+#[derive(Clone)]
 pub enum OrbitalRotation {
     /// Preserve the existing order and arithmetic of sequential / L-BFGS updates.
     Givens(Array1<f64>),
@@ -49,6 +50,7 @@ pub struct NewtonDiagnostics {
     pub status: NewtonStatus,
 }
 
+#[derive(Clone)]
 pub struct OrbitalUpdate {
     pub rotation: OrbitalRotation,
     pub energy_before: f64,

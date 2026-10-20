@@ -4,8 +4,9 @@ use clap::Parser;
 use ndarray::{Array2, Array4};
 use oouccd_rs::chemistry::pyscf_driver::PyScfDriver;
 use oouccd_rs::config::{RdmEvaluationConfig, TaskConfig};
-use oouccd_rs::optimizer::orbital::{OrbitalProblem, OrbitalRotation};
+use oouccd_rs::optimizer::orbital::OrbitalRotation;
 use oouccd_rs::optimizer::solver::Optimizer;
+use oouccd_rs::optimizer::statistical_oo::OoStatisticsRecord;
 use oouccd_rs::optimizer::utils::givens_rotate_2d;
 use oouccd_rs::quantum::rdm_measurement::RdmMeasurementPlan;
 use serde::Serialize;
@@ -17,6 +18,13 @@ struct Args {
     config: PathBuf,
     #[arg(long)]
     output: PathBuf,
+    /// Controlled experiment: keep UCC energy evaluations exact while OO remains noisy.
+    #[arg(long)]
+    exact_ucc: bool,
+    /// Development-only comparison: apply the joint affine correction to UCC
+    /// energy evaluations too. Estimated weights can introduce finite-shot bias.
+    #[arg(long, conflicts_with = "exact_ucc")]
+    affine_ucc: bool,
 }
 
 #[derive(Serialize)]
@@ -35,6 +43,8 @@ struct Iteration {
 
 #[derive(Serialize)]
 struct OoRecord {
+    proposed_exact_energy_after_ha: f64,
+    statistics: OoStatisticsRecord,
     measured_energy_before_ha: f64,
     measured_energy_after_ha: f64,
     exact_energy_before_ha: f64,
@@ -48,6 +58,8 @@ struct OoRecord {
 
 #[derive(Serialize)]
 struct Report {
+    ucc_mitigation: String,
+    ucc_measurement_mode: String,
     task_name: String,
     method: String,
     status: String,
@@ -102,6 +114,13 @@ fn main() -> Result<()> {
         evaluations * plan.number_measured_pauli_words() as u64 * shots.unwrap_or(0) as u64
     };
     let mut report = Report {
+        ucc_mitigation: if args.affine_ucc { "affine" } else { "none" }.into(),
+        ucc_measurement_mode: if args.exact_ucc {
+            "exact"
+        } else {
+            "configured"
+        }
+        .into(),
         task_name: config.task_name,
         method: config.method.label,
         status: "running".into(),
@@ -139,20 +158,25 @@ fn main() -> Result<()> {
     save(&args.output, &report)?;
     for macro_iteration in 1..=optimizer.max_macro_iterations {
         let result: Result<Iteration> = (|| {
-            let (one, two) = optimizer
+            let samples = optimizer
                 .quantum_engine
-                .get_rdm(optimizer.vqe_params.as_slice().unwrap());
+                .get_pauli_samples(optimizer.vqe_params.as_slice().unwrap());
             report.rdm_evaluations += 1;
             let before_exact = optimizer
                 .classical_engine
                 .evaluate_energy(&exact.0, &exact.1);
-            let problem = OrbitalProblem {
-                engine: &optimizer.classical_engine,
-                rdm1: &one,
-                rdm2: &two,
-                pairs: &optimizer.oo_params_pairs,
-            };
-            let update = optimizer.orb_opt.as_ref().unwrap().optimize(&problem)?;
+            let (update, statistics) =
+                optimizer.orbital_update_from_samples(&samples, macro_iteration)?;
+            let proposed_rotation =
+                Array2::from_shape_fn((context.n_orb, context.n_orb), |(i, j)| {
+                    statistics.proposed_rotation[i][j]
+                });
+            let (proposed_h1, proposed_h2) = optimizer
+                .classical_engine
+                .rotated_integrals(&proposed_rotation);
+            let proposed_exact_energy_after_ha = optimizer.classical_engine.nuclear_repulsion
+                + (&proposed_h1 * &exact.0).sum()
+                + (&proposed_h2 * &exact.1).sum();
             let step_norm = match &update.rotation {
                 OrbitalRotation::Givens(angles) => {
                     for (&(i, j), &angle) in optimizer.oo_params_pairs.iter().zip(angles) {
@@ -177,6 +201,8 @@ fn main() -> Result<()> {
                 .classical_engine
                 .evaluate_energy(&exact.0, &exact.1);
             let oo = OoRecord {
+                proposed_exact_energy_after_ha,
+                statistics,
                 measured_energy_before_ha: update.energy_before,
                 measured_energy_after_ha: update.energy_after,
                 exact_energy_before_ha: before_exact,
@@ -193,14 +219,35 @@ fn main() -> Result<()> {
             let quantum = &optimizer.quantum_engine;
             let classical = &optimizer.classical_engine;
             let evaluations = &mut report.rdm_evaluations;
+            let constraints = &optimizer.affine_constraints;
+            let mut correction_error = None;
             let mut objective = |theta: &[f64]| {
-                let (g1, g2) = quantum.get_rdm(theta);
+                let (g1, g2) = if args.exact_ucc {
+                    plan.evaluate_exact(&quantum.get_state_vector(theta))
+                } else if args.affine_ucc {
+                    let batch = quantum.get_pauli_samples(theta);
+                    let means = match constraints.correct(&batch, &plan) {
+                        Ok(correction) => correction.means,
+                        Err(error) => {
+                            // Finish the solver callback with a finite value,
+                            // then fail this trajectory explicitly below.
+                            correction_error = Some(error);
+                            batch.means
+                        }
+                    };
+                    plan.reconstruct(&means)
+                } else {
+                    quantum.get_rdm(theta)
+                };
                 *evaluations += 1;
                 classical.evaluate_energy(&g1, &g2)
             };
             optimizer
                 .ucc_opt
                 .optimize(&mut optimizer.vqe_params, &mut objective);
+            if let Some(error) = correction_error {
+                return Err(error).context("UCC affine reconstruction failed");
+            }
             ensure!(
                 optimizer.vqe_params.iter().all(|v| v.is_finite()),
                 "Non-finite UCC parameters"
@@ -224,7 +271,7 @@ fn main() -> Result<()> {
                 measured_energy_ha: measured,
                 exact_energy_ha: exact_energy,
                 rdm_evaluations: report.rdm_evaluations,
-                modeled_shots: count_shots(report.rdm_evaluations),
+                modeled_shots: count_shots(optimizer.quantum_engine.sampled_batch_count()),
                 elapsed_seconds: started.elapsed().as_secs_f64(),
                 theta: optimizer.vqe_params.to_vec(),
                 orbital_rotation: matrix_rows(&rotation),
@@ -246,12 +293,15 @@ fn main() -> Result<()> {
                 report.status = "failed".into();
                 report.error = Some(format!("{error:#}"));
                 report.failed_macro_iteration = Some(macro_iteration);
-                report.modeled_shots = count_shots(report.rdm_evaluations);
+                report.modeled_shots = count_shots(optimizer.quantum_engine.sampled_batch_count());
                 save(&args.output, &report).context("Saving a failed trajectory")?;
                 return Ok(());
             }
         }
-        report.modeled_shots = count_shots(report.rdm_evaluations);
+        report.modeled_shots = report
+            .iterations
+            .last()
+            .map_or(0, |iteration| iteration.modeled_shots);
         save(&args.output, &report)?;
     }
     report.status = "completed".into();

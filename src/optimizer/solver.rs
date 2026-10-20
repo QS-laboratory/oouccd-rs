@@ -1,6 +1,7 @@
 use crate::checkpoint::manager::Logger;
 use crate::chemistry::engine::ClassicalEngine;
 use crate::chemistry::molecular_context::MolecularContext;
+use crate::config::OrbitalStatisticsConfig;
 use crate::config::{
     AnsatzConfig, MethodConfig, OrbitalOptimizerConfig, OrbitalSolverConfig, RdmEvaluationConfig,
     SolverConfig, UccOptimizerConfig,
@@ -10,8 +11,10 @@ use crate::optimizer::newton::NewtonOrbitalOptimizer;
 pub use crate::optimizer::orbital::{
     OrbitalOptimizer, OrbitalProblem, OrbitalRotation, OrbitalUpdate,
 };
+use crate::optimizer::statistical_oo::{self, OoStatisticsRecord};
 use crate::optimizer::trigonometric::minimize_trigonometric_func;
 use crate::quantum::engine::QuantumEngine;
+use crate::quantum::rdm_statistics::{AffineConstraints, PauliSamples};
 use crate::quantum::unitary_coupled_cluster_gates::Excitation;
 use ndarray::Array1;
 use std::f64::consts::PI;
@@ -21,6 +24,8 @@ use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::quasinewton::LBFGS;
 
 pub struct Optimizer {
+    pub orbital_statistics: OrbitalStatisticsConfig,
+    pub affine_constraints: AffineConstraints,
     pub classical_engine: ClassicalEngine,
     pub quantum_engine: QuantumEngine,
     pub vqe_params: Array1<f64>,
@@ -35,6 +40,7 @@ pub struct Optimizer {
 
 impl Optimizer {
     pub fn build(ctx: &MolecularContext, method: &MethodConfig) -> anyhow::Result<Self> {
+        method.orbital_statistics.validate()?;
         if let RdmEvaluationConfig::FiniteShot { shots, .. } = method.rdm_evaluation {
             anyhow::ensure!(shots > 0, "finite-shot RDM evaluation requires shots > 0");
         }
@@ -64,7 +70,11 @@ impl Optimizer {
         let n_oo = oo_params_pairs.len();
 
         let ucc_opt = build_ucc_optimizer(&method.ucc_optimizer);
+        let affine_constraints =
+            AffineConstraints::new(quantum_engine.measurement_plan(), ctx.n_elec);
         Ok(Self {
+            orbital_statistics: method.orbital_statistics.clone(),
+            affine_constraints,
             classical_engine,
             quantum_engine,
             vqe_params: Array1::zeros(n_vqe),
@@ -76,6 +86,27 @@ impl Optimizer {
             ucc_opt,
             orb_opt,
         })
+    }
+
+    pub fn orbital_update_from_samples(
+        &self,
+        samples: &PauliSamples,
+        macro_iteration: usize,
+    ) -> anyhow::Result<(OrbitalUpdate, OoStatisticsRecord)> {
+        statistical_oo::optimize(
+            self.orb_opt
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("No orbital optimizer"))?
+                .as_ref(),
+            &self.classical_engine,
+            &self.oo_params_pairs,
+            self.quantum_engine.measurement_plan(),
+            samples,
+            &self.affine_constraints,
+            &self.orbital_statistics,
+            self.max_macro_iterations,
+            macro_iteration,
+        )
     }
 
     pub fn run(&mut self, logger: &mut Logger) -> anyhow::Result<()> {
@@ -97,22 +128,18 @@ impl Optimizer {
         for sweep in 1..=self.max_macro_iterations {
             let t_sweep = std::time::Instant::now();
             // --- Orbital Optimization ---
-            if let Some(oo) = &self.orb_opt {
+            if self.orb_opt.is_some() {
                 eprintln!(
                     "[solver] sweep={sweep}/{} | OO start",
                     self.max_macro_iterations
                 );
                 let t_oo = std::time::Instant::now();
-                let (rdm1, rdm2) = self
+                let samples = self
                     .quantum_engine
-                    .get_rdm(self.vqe_params.as_slice().unwrap());
-                let problem = OrbitalProblem {
-                    engine: &self.classical_engine,
-                    rdm1: &rdm1,
-                    rdm2: &rdm2,
-                    pairs: &self.oo_params_pairs,
-                };
-                let update = oo.optimize(&problem)?;
+                    .get_pauli_samples(self.vqe_params.as_slice().unwrap());
+                let (update, statistics) = self.orbital_update_from_samples(&samples, sweep)?;
+                eprintln!("[oo_statistics] sweep={sweep} accepted={} reason={} validation_delta={:?} upper={:?}",
+                    statistics.accepted,statistics.reason,statistics.validation_delta_ha,statistics.validation_upper_bound_ha);
                 if let Some(report) = &update.newton {
                     eprintln!(
                         "[newton] sweep={sweep} energy_before={:.12} energy_after={:.12} gradient_norm={:.6e} hessian_shift={:.6e} step_norm={:.6e} line_search_scale={:.6e} status={:?}",
@@ -194,7 +221,7 @@ fn build_ucc_optimizer(config: &UccOptimizerConfig) -> Box<dyn UccOptimizer> {
     }
 }
 
-fn build_orbital_optimizer(
+pub fn build_orbital_optimizer(
     config: &OrbitalOptimizerConfig,
 ) -> anyhow::Result<Box<dyn OrbitalOptimizer>> {
     Ok(match &config.solver_config {

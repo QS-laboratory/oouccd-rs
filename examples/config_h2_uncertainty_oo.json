@@ -1,0 +1,29 @@
+{
+  "task_name": "H2_Affine_Heldout_OO_Smoke",
+  "chemistry": {
+    "geometry": "H 0 0 0; H 0 0 0.735",
+    "basis": "sto-3g"
+  },
+  "method": {
+    "label": "OO(seq,affine,heldout)-UCCD(seq)",
+    "max_macro_iterations": 3,
+    "energy_tolerance": -1.0,
+    "rdm_evaluation": { "type": "finite_shot", "shots": 10000, "seed": 20261020 },
+    "ucc_optimizer": {
+      "ansatz_config": { "type": "UCCD" },
+      "solver_config": { "type": "sequential" }
+    },
+    "orbital_optimizer": {
+      "solver_config": { "type": "sequential" }
+    },
+    "orbital_statistics": {
+      "mitigation": "affine",
+      "acceptance": "heldout",
+      "training_fraction": 0.8,
+      "trajectory_alpha": 0.05,
+      "min_improvement_ha": 0.0,
+      "split_seed": 20261020,
+      "record_counts": true
+    }
+  }
+}

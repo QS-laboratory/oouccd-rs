@@ -13,3 +13,7 @@ summary/*
 
 # LaTeX build outputs; keep source figures and reference PDFs tracked.
 docs/build/
+
+# Scientific Python tools.
+__pycache__/
+*.py[cod]

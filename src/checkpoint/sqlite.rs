@@ -207,6 +207,7 @@ mod tests {
             },
             orbital_optimizer: None,
             rdm_evaluation: crate::config::RdmEvaluationConfig::default(),
+            orbital_statistics: Default::default(),
         };
 
         let task_config = TaskConfig {
