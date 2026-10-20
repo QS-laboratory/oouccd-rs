@@ -11,6 +11,7 @@ recovered. See [the verification report](../../docs/verification.md).
 | `macro_iterations.csv` | 963 unique history rows, including recomputed RHF iteration zero for each run |
 | `scheduler.csv` | Original 56 Slurm array outcomes, exit codes and elapsed times |
 | `historical_comparison.json` | Sanitized comparison with recovered historical endpoints and shared histories |
+| `history_rewrite.json` | Original-to-public source identifiers after history cleanup; original run records retained |
 | `provenance.json` | Executable/source/input/result hashes, settings and recorded scientific-package versions |
 | `public_release_checks.json` | Current-main build/tests, four fresh Slurm checkpoints, and publication-preparation checks |
 

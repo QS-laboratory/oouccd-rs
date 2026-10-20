@@ -112,3 +112,11 @@ Machine-readable results and scheduler outcomes are in
 [`public_release_checks.json`](../results/paper/public_release_checks.json).
 LaTeX compilation was not rerun because `latexmk` is not installed in the
 validation environment; manuscript source and referenced figures were retained.
+
+## Public history cleanup
+
+Recorded source identifiers above refer to the original execution history.
+[History and provenance](history-rewrite.md) and the
+[commit mapping](history-commit-map.csv) identify their rewritten public commits.
+The numerical Rust sources and Cargo lockfile were compared at every original
+commit and are unchanged. Original run records and hashes are retained.

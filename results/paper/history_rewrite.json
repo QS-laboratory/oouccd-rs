@@ -1,0 +1,11 @@
+{
+  "history_rewrite_date": "2026-10-20",
+  "original_records_retained": true,
+  "original_to_public_source_commits": {
+    "6cd1b8b0c49c07439f7385eb2d99416fc3587b15": "e3898607e0e8cd71f3306983456b259106bb69d4",
+    "d66f1ea380647a75c22d18fb5d6fa5e28d480cae": "e0e0a8e9c419d79f74cdaa0abbab5a06cc04fbc4"
+  },
+  "source_and_lockfile_identical_for_all_42_original_commits": true,
+  "mapping_file": "../../docs/history-commit-map.csv",
+  "note": "This maps recorded source identifiers after publication cleanup. Original source, binary, patch, input and result hashes in the run records are unchanged; no calculations were rerun by the rewrite."
+}
