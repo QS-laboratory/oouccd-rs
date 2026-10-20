@@ -104,14 +104,19 @@ for db_path in db_files:
             R_key = round(R_val, 5)
 
             iters = cur.execute(
-                "SELECT macro_idx, energy FROM macro_iterations WHERE run_id = ? ORDER BY macro_idx",
+                "SELECT macro_idx, energy FROM macro_iterations WHERE run_id = ? ORDER BY macro_idx, rowid",
                 (run_id,),
             ).fetchall()
 
             if iters:
                 if R_key not in data:
                     data[R_key] = {}
-                data[R_key][method] = [e for idx, e in iters]
+                unique = {}
+                for index, energy in iters:
+                    if index in unique and abs(unique[index] - energy) > 1e-12:
+                        raise ValueError(f"Conflicting histories at macro {index}: {db_path}")
+                    unique[index] = energy
+                data[R_key][method] = [unique[index] for index in sorted(unique)]
 
         conn.close()
     except Exception as e:

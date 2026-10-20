@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Please cite the accompanying manuscript when using this implementation."
+type: software
+title: "oouccd-rs: Sequential orbital optimization for VQE"
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/QS-laboratory/oouccd-rs"
+authors:
+  - family-names: Hayashi
+    given-names: Hiromichi
+preferred-citation:
+  type: article
+  title: "Sequential optimization for orbital-optimized variational quantum eigensolvers"
+  authors:
+    - family-names: Hayashi
+      given-names: Hiromichi
+    - family-names: Sato
+      given-names: Takeshi
+  year: 2026
+  month: 10
+  url: "https://arxiv.org/abs/2610.16032"
+  license: CC-BY-4.0
+  notes: "arXiv:2610.16032. Included author source corrects the excitation-gate order description relative to v1."

@@ -1,0 +1,105 @@
+{
+  "task_name": "LiH_Paper",
+  "chemistry": {
+    "geometry": "Li 0 0 0; H 0 0 {R}",
+    "basis": "sto-3g",
+    "charge": 0,
+    "spin": 0,
+    "freeze_core": 0
+  },
+  "distances_angstrom": [
+    1.0,
+    1.2,
+    1.4,
+    1.6,
+    1.8,
+    2.0,
+    2.2,
+    2.4,
+    2.6,
+    2.8,
+    3.0,
+    3.2,
+    3.4,
+    3.6
+  ],
+  "methods": [
+    {
+      "label": "UCCD(seq)",
+      "max_macro_iterations": 100,
+      "energy_tolerance": 1e-08,
+      "rdm_evaluation": {
+        "type": "statevector"
+      },
+      "ucc_optimizer": {
+        "ansatz_config": {
+          "type": "UCCD"
+        },
+        "solver_config": {
+          "type": "sequential"
+        }
+      },
+      "orbital_optimizer": null
+    },
+    {
+      "label": "UCCSD(seq)",
+      "max_macro_iterations": 100,
+      "energy_tolerance": 1e-08,
+      "rdm_evaluation": {
+        "type": "statevector"
+      },
+      "ucc_optimizer": {
+        "ansatz_config": {
+          "type": "UCCSD"
+        },
+        "solver_config": {
+          "type": "sequential"
+        }
+      },
+      "orbital_optimizer": null
+    },
+    {
+      "label": "OO(seq)-UCCD(seq)",
+      "max_macro_iterations": 100,
+      "energy_tolerance": 1e-08,
+      "rdm_evaluation": {
+        "type": "statevector"
+      },
+      "ucc_optimizer": {
+        "ansatz_config": {
+          "type": "UCCD"
+        },
+        "solver_config": {
+          "type": "sequential"
+        }
+      },
+      "orbital_optimizer": {
+        "solver_config": {
+          "type": "sequential"
+        }
+      }
+    },
+    {
+      "label": "OO(lbfgs)-UCCD(seq)",
+      "max_macro_iterations": 100,
+      "energy_tolerance": 1e-08,
+      "rdm_evaluation": {
+        "type": "statevector"
+      },
+      "ucc_optimizer": {
+        "ansatz_config": {
+          "type": "UCCD"
+        },
+        "solver_config": {
+          "type": "sequential"
+        }
+      },
+      "orbital_optimizer": {
+        "solver_config": {
+          "type": "lbfgs",
+          "max_iter": 200
+        }
+      }
+    }
+  ]
+}

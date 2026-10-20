@@ -1,5 +1,5 @@
 {
-  "task_name": "Manual_H2_UCCD",
+  "task_name": "Manual_H2_UCCSD",
   "chemistry": {
     "geometry": "H 0 0 0; H 0 0 0.74",
     "basis": "sto-3g",

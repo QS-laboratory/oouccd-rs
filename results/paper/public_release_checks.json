@@ -1,0 +1,153 @@
+{
+  "checked_date": "2026-10-20",
+  "base_commit": "d66f1ea380647a75c22d18fb5d6fa5e28d480cae",
+  "working_tree_changes_present": true,
+  "numerical_rust_sources_unchanged_from_base": true,
+  "rust_library_tests_passed": 22,
+  "all_examples_compiled": true,
+  "h2_cli_and_api": [
+    {
+      "energy_hartree": -1.1372838344884912,
+      "iterations": 2,
+      "converged": true
+    },
+    {
+      "energy_hartree": -1.1372838344884912,
+      "iterations": 2,
+      "converged": true
+    }
+  ],
+  "fresh_slurm_smoke_points": [
+    {
+      "task": "task_003",
+      "method": "UCCD(seq)",
+      "geometry": "Li 0 0 0; H 0 0 1.60000",
+      "energy_hartree": -7.8818753062957825,
+      "iterations": 4,
+      "converged": true,
+      "final_delta_hartree": 6.319433865087376e-09,
+      "checkpoint_error_hartree": 4.085620730620576e-14,
+      "expected_iterations": 4,
+      "iteration_count_matches": true
+    },
+    {
+      "task": "task_017",
+      "method": "UCCSD(seq)",
+      "geometry": "Li 0 0 0; H 0 0 1.60000",
+      "energy_hartree": -7.882313807184419,
+      "iterations": 7,
+      "converged": true,
+      "final_delta_hartree": 2.5657760360786597e-09,
+      "checkpoint_error_hartree": -1.3322676295501878e-14,
+      "expected_iterations": 7,
+      "iteration_count_matches": true
+    },
+    {
+      "task": "task_031",
+      "method": "OO(seq)-UCCD(seq)",
+      "geometry": "Li 0 0 0; H 0 0 1.60000",
+      "energy_hartree": -7.882313806735334,
+      "iterations": 7,
+      "converged": true,
+      "final_delta_hartree": 7.52257722780314e-09,
+      "checkpoint_error_hartree": 1.1191048088221578e-13,
+      "expected_iterations": 7,
+      "iteration_count_matches": true
+    },
+    {
+      "task": "task_045",
+      "method": "OO(lbfgs)-UCCD(seq)",
+      "geometry": "Li 0 0 0; H 0 0 1.60000",
+      "energy_hartree": -7.882313807311215,
+      "iterations": 7,
+      "converged": true,
+      "final_delta_hartree": 3.2546267902944237e-09,
+      "checkpoint_error_hartree": -1.0835776720341528e-13,
+      "expected_iterations": 7,
+      "iteration_count_matches": true
+    }
+  ],
+  "largest_smoke_checkpoint_error_hartree": 1.1191048088221578e-13,
+  "fresh_smoke_binary_sha256": "f73a2e86f16dfa38f4dc4e68c1d3d6611b34f07dc2851649eabcc11d8afd1713",
+  "fresh_smoke_source_archive_sha256": "c5e97a0f6235045e99b1bac3ec16260ba9e66a0386f913d90a44ff8c3bf810e9",
+  "original_scan_rechecked": 56,
+  "generated_inputs_equal_original_protocol": 56,
+  "public_csv_endpoints": 56,
+  "public_csv_history_rows_including_rhf": 963,
+  "full_database_plot_histories_checked": 56,
+  "full_database_plot_figures": 28,
+  "citation_schema_validated": "1.2.0",
+  "python_requirements_resolver_succeeded": true,
+  "scheduler_checks": [
+    {
+      "phase": "build",
+      "job_id": "13128",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 38,
+      "node": "argo01"
+    },
+    {
+      "phase": "export",
+      "job_id": "13129",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 3,
+      "node": "argo02"
+    },
+    {
+      "phase": "smoke",
+      "job_id": "13141_3",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 162,
+      "node": "argo01"
+    },
+    {
+      "phase": "smoke",
+      "job_id": "13141_17",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 354,
+      "node": "argo02"
+    },
+    {
+      "phase": "smoke",
+      "job_id": "13141_31",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 284,
+      "node": "argo01"
+    },
+    {
+      "phase": "smoke",
+      "job_id": "13141_45",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 284,
+      "node": "argo02"
+    },
+    {
+      "phase": "smoke_analysis",
+      "job_id": "13142",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 3,
+      "node": "argo02"
+    },
+    {
+      "phase": "plot_check",
+      "job_id": "13206",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed_seconds": 8,
+      "node": "argo01"
+    }
+  ],
+  "limits": [
+    "No new full 56-geometry scan was run during publication preparation; all original raw databases were rechecked and four current-code checkpoints rerun.",
+    "Five later historical UCCSD endpoints remain unavailable; one common intermediate energy differs by more than 1e-8 Ha.",
+    "LaTeX compilation was not rerun: latexmk is not installed in this environment.",
+    "Private raw workspaces and complete logs are not included in the compact public data."
+  ]
+}
