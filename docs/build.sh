@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")"
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: ./docs/build.sh main_rev2[.tex]" >&2
+    echo "Usage: ./docs/build.sh main_rev3[.tex]" >&2
     exit 2
 fi
 

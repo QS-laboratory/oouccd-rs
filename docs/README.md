@@ -1,13 +1,22 @@
-# LaTeX 原稿の管理
+# Research documentation
 
-- `main.tex`、`main_rev.tex`、`main_rev2.tex`、`main_rev3.tex` はそれぞれ独立した原稿です。次の版は `main_rev4.tex` のように追加します。
-- 図は `figures/`、収集した参考資料は `references/` に置きます。これらはビルド生成物ではありません。
-- リポジトリのルートから `sh docs/build.sh main_rev2` を実行すると、PDF と補助ファイルを `docs/build/main_rev2/` に出力します。引数には `.tex` を付けても構いません。他の版も同様に原稿名を指定します。
-- `docs/build/` は Git 管理対象外です。共有・提出する確定版 PDF が必要な場合は、ビルド後に目的が分かる名前で別途保存してください。
-- VS Code でこのリポジトリのルートを開くと、`.vscode/settings.json` により LaTeX Workshop での保存時ビルドも `docs/build/<原稿名>/` に出力されます。PDF プレビューもこの出力先を参照します。`docs/` だけをワークスペースとして開く場合は、この設定が適用されないためルートを開き直してください。
+- [Branch overview and installation](../README.md).
+- [Analytic Newton OO and shared Pauli RDM evaluation](newton_oo.md).
+- [RDM reconstruction and uncertainty-aware OO](uncertainty_oo.md).
+- [Shot-noise evaluation and scoring](lih_shot_noise_evaluation.md).
+- [Manuscript version and CC BY 4.0 license](manuscript-license.md).
+- [Public history and numerical provenance](history-rewrite.md).
 
-ビルドには TeX Live の `latexmk` と、原稿が使用する LaTeX パッケージが必要です。ビルドは `docs/` を作業ディレクトリとして実行するため、原稿中の `figures/...` の参照を変更する必要はありません。
+`main_rev3.tex` is the author manuscript based on
+[arXiv:2610.16032v1](https://arxiv.org/abs/2610.16032v1), with the excitation-gate
+order description corrected. The required scientific figures are in `figures/`.
+Earlier drafts, submission correspondence and downloaded article PDFs are not
+included. With REVTeX, the required packages and `latexmk`, build from the root:
 
-数値計算のPauli RDM共通化、Newton OOの設定・検証方法は [newton_oo.md](newton_oo.md) を参照してください。
+```bash
+sh docs/build.sh main_rev3
+```
 
-RDMの制約付き再構成、共有RDMの共分散伝播、統計的不確かさを考慮したOOと比較実験の実行方法は [uncertainty_oo.md](uncertainty_oo.md) にまとめています。
+Generated files go to ignored `docs/build/main_rev3/`. Use the
+[main branch](https://github.com/QS-laboratory/oouccd-rs/tree/main) for the
+paper baseline's verified Slurm workflow and compact numerical tables.

@@ -1,19 +1,43 @@
-infra/configs/*
+# Build products and local scientific environments.
+/target/
+/.venv/
+/.paper-env/
+/seq-venv/
+/.qollage/
+
+# Raw calculation workspaces, databases, and private deployment inputs.
+/local_runs/
+/infra/
+/summary/results/
+/summary/images/
 *.db
+*.db-shm
+*.db-wal
 .env
-target/
-seq-venv/
-.paper-env/
-local_runs/
-.qollage/
-infra/
+.env.*
 
-summary/*
-!summary/scripts
-
-# LaTeX build outputs; keep source figures and reference PDFs tracked.
-docs/build/
-
-# Scientific Python tools.
+# Generated files; numerical tables intentionally live under results/paper/.
 __pycache__/
 *.py[cod]
+/circuit.png
+/docs/build/
+/slurm-*.out
+.DS_Store
+
+# Private papers/submission files and generated manuscript products.
+/docs/references/
+/docs/main.tex
+/docs/main_rev.tex
+/docs/main_rev2.tex
+/docs/applied-physics-2026/
+/docs/cover_letter*.tex
+/docs/*.aux
+/docs/*.bbl
+/docs/*.blg
+/docs/*.fdb_latexmk
+/docs/*.fls
+/docs/*.log
+/docs/*.pdf
+/docs/*.synctex.gz
+/docs/*Notes.bib
+/examples/check_vqe

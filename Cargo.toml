@@ -2,6 +2,10 @@
 name = "oouccd-rs"
 version = "0.1.0"
 edition = "2021"
+description = "Sequential orbital optimization for unitary coupled-cluster VQE simulations"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/QS-laboratory/oouccd-rs"
 
 [dependencies]
 aberth = "0.4.1"
