@@ -459,9 +459,9 @@ Both figures use the same rerun dataset. Of the 56 calculations, 53 satisfy the 
 \end{figure}
 %
 
-Figure~\ref{fig:lih_pes} illustrates the calculated PES and the corresponding errors relative to the exact FCI solution. As the bond stretches (\( R > 2.0 \)~\AA), UCCD(seq), which lacks single excitations, exhibits significant deviations from the exact FCI energy, reaching errors on the order of \( 10^{-2} \) Ha. In contrast, UCCSD(seq) incorporates single excitations and accurately captures the correlation energy throughout the bond-stretching range considered.
+Figure~\ref{fig:lih_pes} illustrates the calculated PES and the corresponding errors relative to the exact FCI solution. As the bond stretches (\( R > 2.0 \)~\AA), UCCD(seq), which lacks single excitations, exhibits significant deviations from the exact FCI energy, reaching errors of up to \( 7 \times 10^{-3} \) Ha. In contrast, UCCSD(seq) incorporates single excitations and accurately captures the correlation energy throughout the bond-stretching range considered.
 %
-OO(seq)-UCCD(seq) closely reproduces the accuracy of UCCSD(seq) and remains well within the conventional chemical-accuracy threshold, with errors on the order of \(10^{-5}\)--\(10^{-4}\) Ha across the curve.
+OO(seq)-UCCD(seq) closely reproduces the accuracy of UCCSD(seq) and remains well within the conventional chemical-accuracy threshold, with errors between \(5 \times 10^{-6}\) and \(1.1 \times 10^{-4}\) Ha across the curve.
 This result is consistent with the role of orbital optimization in the OO-UCC framework~\cite{mizukami2020}: orbital rotations can account for much of the variational flexibility otherwise provided by single-excitation operators \( \hat{T}_1 \), allowing the shallower UCCD-only quantum circuit to achieve UCCSD-level accuracy in this system.
 %
 \begin{figure}[htbp]
