@@ -2,6 +2,7 @@
 % Copyright (c) 2026 Hiromichi Hayashi and Takeshi Sato.
 % Based on arXiv:2610.16032v1; gate order corrected and figures regenerated.
 % See manuscript-license.md for attribution, license and version details.
+% main_rev3_diff_arxiv_v1.tex marks every change relative to arXiv v1 (latexdiff).
 \documentclass[
  reprint,
  amsmath,amssymb,
@@ -472,7 +473,7 @@ This result is consistent with the role of orbital optimization in the OO-UCC fr
 %
 
 For the convergence analysis, we also include OO(lbfgs)-UCCD(seq), in which the orbital rotations are optimized by the L-BFGS method from the \texttt{argmin} Rust optimization library~\cite{Kroboth2025}. Gradients are computed using central finite differences with step size \( \varepsilon = 10^{-5} \), which is appropriate for noise-free state-vector simulation.
-Figure~\ref{fig:lih_convergence} details the convergence behavior of the macro-iterations near an equilibrium geometry (\( R = 1.60 \)~\AA). While UCCD(seq) quickly converges to a suboptimal local minimum, both OO(seq)-UCCD(seq) and OO(lbfgs)-UCCD(seq) converge to the UCCSD(seq) energy limit. The gradient-free sequential orbital sweep in OO(seq)-UCCD(seq) performs comparably to the L-BFGS orbital optimization in OO(lbfgs)-UCCD(seq), requiring 7 macro-iterations to reach convergence.
+Figure~\ref{fig:lih_convergence} details the convergence behavior of the macro-iterations near an equilibrium geometry (\( R = 1.60 \)~\AA). While UCCD(seq) quickly converges to a higher energy, reflecting the absence of single excitations, both OO(seq)-UCCD(seq) and OO(lbfgs)-UCCD(seq) converge to the UCCSD(seq) energy limit. The gradient-free sequential orbital sweep in OO(seq)-UCCD(seq) performs comparably to the L-BFGS orbital optimization in OO(lbfgs)-UCCD(seq), requiring 7 macro-iterations to reach convergence.
 By achieving comparable accuracy without explicitly evaluating orbital gradients or Hessians, SOO-UCCD provides a gradient-free alternative for quantum--classical hybrid calculations.
 
 These results highlight a practical feature of the SOO-UCCD algorithm relative to gradient-based orbital optimization such as the Newton--Raphson OO-VQE formulation~\cite{mizukami2020}. The sequential sweep is gradient-free and hyperparameter-free, yet shows macro-iteration convergence comparable to the L-BFGS orbital optimization in the present LiH benchmark.
