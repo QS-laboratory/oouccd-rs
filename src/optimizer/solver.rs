@@ -8,7 +8,7 @@ use crate::optimizer::lbfgs::finite_diff_gradient;
 use crate::optimizer::trigonometric::minimize_trigonometric_func;
 use crate::quantum::engine::QuantumEngine;
 use crate::quantum::unitary_coupled_cluster_gates::Excitation;
-use ndarray::Array1;
+use ndarray::{Array1, Array2, Array4};
 use std::f64::consts::PI;
 
 use argmin::core::{CostFunction, Error, Executor, Gradient, State};
@@ -20,7 +20,6 @@ pub struct Optimizer {
     pub quantum_engine: QuantumEngine,
     pub vqe_params: Array1<f64>,
     pub vqe_params_pairs: Vec<Excitation>,
-    pub oo_params: Array1<f64>,
     pub oo_params_pairs: Vec<(usize, usize)>,
     pub max_macro_iterations: usize,
     pub energy_tolerance: f64,
@@ -48,7 +47,6 @@ impl Optimizer {
         let oo_params_pairs: Vec<(usize, usize)> = (0..n_occ)
             .flat_map(|i| (n_occ..n_orb).map(move |k| (i, k)))
             .collect();
-        let n_oo = oo_params_pairs.len();
 
         let ucc_opt = build_ucc_optimizer(&method.ucc_optimizer);
         let orb_opt = method
@@ -61,7 +59,6 @@ impl Optimizer {
             quantum_engine,
             vqe_params: Array1::zeros(n_vqe),
             vqe_params_pairs,
-            oo_params: Array1::zeros(n_oo),
             oo_params_pairs,
             max_macro_iterations: method.max_macro_iterations.unwrap_or(50),
             energy_tolerance: method.energy_tolerance.unwrap_or(1e-6),
@@ -98,22 +95,12 @@ impl Optimizer {
                 let (rdm1, rdm2) = self
                     .quantum_engine
                     .get_rdm(self.vqe_params.as_slice().unwrap());
-                let pairs = &self.oo_params_pairs;
-                let engine = &self.classical_engine;
-
-                let mut eval_oo = |kappa: &[f64]| -> f64 {
-                    engine.evaluate_energy_with_kappa(&rdm1, &rdm2, pairs, kappa)
-                };
-
-                oo.optimize(&mut self.oo_params, &mut eval_oo);
-
-                // Apply the optimal kappa permanently
-                for (p, &angle) in self.oo_params.iter().enumerate() {
-                    let (i, k) = self.oo_params_pairs[p];
-                    self.classical_engine.rotate_electron_integrals(i, k, angle);
-                }
-                // Reset oo_params to zero (rotation is now baked into h1, h2)
-                self.oo_params.fill(0.0);
+                oo.optimize(
+                    &mut self.classical_engine,
+                    &rdm1,
+                    &rdm2,
+                    &self.oo_params_pairs,
+                );
                 eprintln!(
                     "[solver] sweep={sweep}/{} | OO done ({:.1}s)",
                     self.max_macro_iterations,
@@ -180,7 +167,15 @@ pub trait UccOptimizer {
 }
 
 pub trait OrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64;
+    /// Minimize the energy at fixed RDMs, leaving the optimal rotations applied to
+    /// the engine's integrals. Returns the optimized energy.
+    fn optimize(
+        &self,
+        engine: &mut ClassicalEngine,
+        rdm1: &Array2<f64>,
+        rdm2: &Array4<f64>,
+        pairs: &[(usize, usize)],
+    ) -> f64;
 }
 
 fn build_ucc_optimizer(config: &UccOptimizerConfig) -> Box<dyn UccOptimizer> {
@@ -248,9 +243,17 @@ struct LbfgsOrbitalOptimizer {
     max_iter: usize,
 }
 impl OrbitalOptimizer for LbfgsOrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
-        let problem = ArgminProblem::new(objective, 1e-5);
-        let init_param = kappa.to_vec();
+    fn optimize(
+        &self,
+        engine: &mut ClassicalEngine,
+        rdm1: &Array2<f64>,
+        rdm2: &Array4<f64>,
+        pairs: &[(usize, usize)],
+    ) -> f64 {
+        let mut objective =
+            |kappa: &[f64]| engine.evaluate_energy_with_kappa(rdm1, rdm2, pairs, kappa);
+        let problem = ArgminProblem::new(&mut objective, 1e-5);
+        let init_param = vec![0.0; pairs.len()];
 
         let linesearch = MoreThuenteLineSearch::new().with_c(1e-4, 0.9).unwrap();
         let solver = LBFGS::new(linesearch, 10)
@@ -265,28 +268,39 @@ impl OrbitalOptimizer for LbfgsOrbitalOptimizer {
         let x_opt = res.state().get_best_param().unwrap().clone();
         let e_opt = res.state().get_best_cost();
 
-        *kappa = Array1::from_vec(x_opt);
+        for (&(i, a), &angle) in pairs.iter().zip(&x_opt) {
+            engine.rotate_electron_integrals(i, a, angle);
+        }
         e_opt
     }
 }
 
 struct SequentialOrbitalOptimizer;
 impl OrbitalOptimizer for SequentialOrbitalOptimizer {
-    fn optimize(&self, kappa: &mut Array1<f64>, objective: &mut dyn FnMut(&[f64]) -> f64) -> f64 {
-        let n = kappa.len();
-        let mut current_energy = objective(kappa.as_slice().unwrap());
+    fn optimize(
+        &self,
+        engine: &mut ClassicalEngine,
+        rdm1: &Array2<f64>,
+        rdm2: &Array4<f64>,
+        pairs: &[(usize, usize)],
+    ) -> f64 {
+        let mut current_energy = engine.evaluate_energy(rdm1, rdm2);
 
-        for p in 0..n {
+        for pair in pairs {
             // E(κ_p) is a degree-4 Fourier polynomial (m=2 spin components → 2m=4 frequencies).
             // Requires 2*4+1 = 9 samples to uniquely determine all coefficients.
-            let mut samples = Array1::zeros(9);
-            for j in 0..9 {
-                let mut kappa_trial = kappa.to_vec();
-                kappa_trial[p] = kappa[p] + (PI * 2.0 / 9.0) * (j as f64);
-                samples[j] = objective(&kappa_trial);
-            }
-            let (opt_shift, opt_energy) = minimize_trigonometric_func(&samples);
-            kappa[p] = (kappa[p] + opt_shift + PI).rem_euclid(2.0 * PI) - PI;
+            // Earlier rotations are already in the integrals, so only this pair is rotated.
+            let samples = Array1::from_shape_fn(9, |j| {
+                let angle = (PI * 2.0 / 9.0) * (j as f64);
+                engine.evaluate_energy_with_kappa(
+                    rdm1,
+                    rdm2,
+                    std::slice::from_ref(pair),
+                    &[angle],
+                )
+            });
+            let (opt_angle, opt_energy) = minimize_trigonometric_func(&samples);
+            engine.rotate_electron_integrals(pair.0, pair.1, opt_angle);
             current_energy = opt_energy;
         }
 
