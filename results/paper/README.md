@@ -1,7 +1,7 @@
 # Verified LiH numerical data
 
 These tables come from the completed 56-task Slurm statevector rerun on
-2026-10-19. They were exported after read-only database validation. They are
+2026-11-26. They were exported after read-only database validation. They are
 fresh rerun data, not a claim that every original manuscript database was
 recovered. See [the verification report](../../docs/verification.md).
 
@@ -9,11 +9,9 @@ recovered. See [the verification report](../../docs/verification.md).
 |---|---|
 | `energies.csv` | 56 endpoints: four methods × fourteen bond lengths, RHF/FCI references, stopping information |
 | `macro_iterations.csv` | 963 unique history rows, including recomputed RHF iteration zero for each run |
-| `scheduler.csv` | Original 56 Slurm array outcomes, exit codes and elapsed times |
+| `scheduler.csv` | 56 Slurm array outcomes, exit codes and elapsed times |
 | `historical_comparison.json` | Sanitized comparison with recovered historical endpoints and shared histories |
-| `history_rewrite.json` | Original-to-public source identifiers after history cleanup; original run records retained |
 | `provenance.json` | Executable/source/input/result hashes, settings and recorded scientific-package versions |
-| `public_release_checks.json` | Current-main build/tests, four fresh Slurm checkpoints, and publication-preparation checks |
 
 Energies are Hartree; distances are Å. `error_from_fci_hartree` is the signed
 energy difference, without a plotting floor or absolute-value transformation.
