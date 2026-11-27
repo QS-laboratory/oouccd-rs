@@ -33,7 +33,7 @@
 \RequirePackage[normalem]{ulem} %DIF PREAMBLE
 \RequirePackage{color}\definecolor{RED}{rgb}{1,0,0}\definecolor{BLUE}{rgb}{0,0,1} %DIF PREAMBLE
 \providecommand{\DIFadd}[1]{{\protect\color{blue}\uwave{#1}}} %DIF PREAMBLE
-\providecommand{\DIFdel}[1]{{\protect\color{red}\sout{#1}}}                      %DIF PREAMBLE
+\providecommand{\DIFdel}[1]{{\protect\color{red}\sout{#1}}} %DIF PREAMBLE
 %DIF SAFE PREAMBLE %DIF PREAMBLE
 \providecommand{\DIFaddbegin}{} %DIF PREAMBLE
 \providecommand{\DIFaddend}{} %DIF PREAMBLE
@@ -48,7 +48,7 @@
 \providecommand{\DIFaddendFL}{} %DIF PREAMBLE
 \providecommand{\DIFdelbeginFL}{} %DIF PREAMBLE
 \providecommand{\DIFdelendFL}{} %DIF PREAMBLE
-\newcommand{\DIFscaledelfig}{0.5}
+\providecommand{\DIFscaledelfig}{0.5}
 %DIF HIGHLIGHTGRAPHICS PREAMBLE %DIF PREAMBLE
 \RequirePackage{settobox} %DIF PREAMBLE
 \RequirePackage{letltxmacro} %DIF PREAMBLE
@@ -57,8 +57,8 @@
 \newlength{\DIFdelgraphicsheight} %DIF PREAMBLE
 % store original definition of \includegraphics %DIF PREAMBLE
 \LetLtxMacro{\DIFOincludegraphics}{\includegraphics} %DIF PREAMBLE
-\newcommand{\DIFaddincludegraphics}[2][]{{\color{blue}\fbox{\DIFOincludegraphics[#1]{#2}}}} %DIF PREAMBLE
-\newcommand{\DIFdelincludegraphics}[2][]{% %DIF PREAMBLE
+\providecommand{\DIFaddincludegraphics}[2][]{{\color{blue}\fbox{\DIFOincludegraphics[#1]{#2}}}} %DIF PREAMBLE
+\providecommand{\DIFdelincludegraphics}[2][]{% %DIF PREAMBLE
 \sbox{\DIFdelgraphicsbox}{\DIFOincludegraphics[#1]{#2}}% %DIF PREAMBLE
 \settoboxwidth{\DIFdelgraphicswidth}{\DIFdelgraphicsbox} %DIF PREAMBLE
 \settoboxtotalheight{\DIFdelgraphicsheight}{\DIFdelgraphicsbox} %DIF PREAMBLE
@@ -89,6 +89,11 @@
 \DeclareRobustCommand{\DIFaddendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
 \DeclareRobustCommand{\DIFdelbeginFL}{\DIFOdelbeginFL \let\includegraphics\DIFdelincludegraphics} %DIF PREAMBLE
 \DeclareRobustCommand{\DIFdelendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+%DIF AMSMATHULEM PREAMBLE %DIF PREAMBLE
+\makeatletter %DIF PREAMBLE
+\let\sout@orig\sout %DIF PREAMBLE
+\renewcommand{\sout}[1]{\ifmmode\text{\sout@orig{\ensuremath{#1}}}\else\sout@orig{#1}\fi} %DIF PREAMBLE
+\makeatother %DIF PREAMBLE
 %DIF COLORLISTINGS PREAMBLE %DIF PREAMBLE
 \RequirePackage{listings} %DIF PREAMBLE
 \RequirePackage{color} %DIF PREAMBLE
@@ -103,8 +108,10 @@
 	columns=fullflexible, %DIF PREAMBLE
 	keepspaces=true %DIF PREAMBLE
 } %DIF PREAMBLE
-\lstnewenvironment{DIFverbatim}{\lstset{style=DIFverbatimstyle}}{} %DIF PREAMBLE
-\lstnewenvironment{DIFverbatim*}{\lstset{style=DIFverbatimstyle,showspaces=true}}{} %DIF PREAMBLE
+\lstnewenvironment{DIFverbatim}[1][]{\lstset{style=DIFverbatimstyle}}{} %DIF PREAMBLE
+\lstnewenvironment{DIFverbatim*}[1][]{\lstset{style=DIFverbatimstyle,showspaces=true}}{} %DIF PREAMBLE
+\lstset{extendedchars=\true,inputencoding=utf8}
+
 %DIF END PREAMBLE EXTENSION ADDED BY LATEXDIFF
 
 \begin{document}
@@ -532,8 +539,7 @@ This alternation between classical integral transformations and quantum ansatz o
 To evaluate the performance of the SOO-UCCD algorithm, we compute the potential energy surface (PES) of the lithium hydride (LiH) molecule (4 electrons, 6 spatial orbitals, STO-3G basis set) using exact state-vector simulation. All quantum circuit evaluations are performed classically without shot noise.
 Electronic integrals and full configuration interaction (FCI) reference energies are obtained from PySCF~\cite{sun2015,sun2018,sun2020}.
 The macro-iterations are repeated until the total energy change between consecutive iterations falls below a convergence threshold of \( 10^{-8} \) Hartree, or until a maximum limit of 100 macro-iterations is reached. We compare UCCD(seq), UCCSD(seq), and OO(seq)-UCCD(seq), where the labels in parentheses denote the optimizer used for the corresponding UCC amplitudes or orbital rotations. Here, ``seq'' denotes the sequential gradient-free update based on the reconstructed one-dimensional energy profile.
-\DIFaddbegin \DIFadd{The figures presented here are generated from a complete rerun of the four methods, including the L-BFGS orbital-optimization comparison, at fourteen bond lengths from 1.0 to 3.6~\AA\ in steps of 0.2~\AA.
-Both figures use the same rerun dataset. Of the 56 calculations, 53 satisfy the energy-change criterion; the UCCSD calculations at 3.0, 3.2, and 3.4~\AA\ reach the 100-macro-iteration limit.
+\DIFaddbegin \DIFadd{The PES is computed at fourteen bond lengths from 1.0 to 3.6~\AA\ in steps of 0.2~\AA. All calculations satisfy the energy-change criterion except UCCSD(seq) at 3.0, 3.2, and 3.4~\AA, which reach the 100-macro-iteration limit.
 }\DIFaddend %
 \begin{figure}[htbp]
     \centering
@@ -586,13 +592,11 @@ to assist with language editing. All AI-assisted suggestions were critically rev
 verified by the authors, who take full responsibility for the content of the manuscript.
 
 \section*{Data Availability}
-The \DIFdelbegin \DIFdel{data and source codesupporting the findings of this article are not publicly available at
-the time of publication because the source
-code is under active development. They are available from the corresponding author upon reasonable request}\DIFdelend \DIFaddbegin \DIFadd{source code, calculation inputs, numerical tables, and plotting scripts
+The \DIFdelbegin \DIFdel{data and source codesupporting the findings of this article are not publicly available at the time of publication because the source
+code is under active development. They are available from the
+corresponding author upon reasonable request}\DIFdelend \DIFaddbegin \DIFadd{source code, calculation inputs, numerical tables, and plotting scripts
 supporting this work are included in the accompanying repository at
-}\url{https://github.com/QS-laboratory/oouccd-rs}\DIFadd{.
-The figure provenance records identify the input tables and plotting code by
-their hashes and link the figures to the rerun dataset}\DIFaddend .
+}\url{https://github.com/QS-laboratory/oouccd-rs}\DIFaddend .
 
 %
 \begin{thebibliography}{99}
